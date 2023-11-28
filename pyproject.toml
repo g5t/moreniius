@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=60", "setuptools_scm>=8.0", "tox>=4.0", "pytest"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moreniius"
+dependencies = [
+    'zenlog==1.1,',
+    'platformdirs==3.11',
+    "importlib_metadata; python_version<'3.8'",
+    'mccode-antlr[hdf5]==0.2.11',
+]
+readme = "README.md"
+authors = [
+    { name = "Gregory Tucker", email = "gregory.tucker@ess.eu" },
+]
+classifiers = [
+    "License :: OSI Approved :: BSD License",
+    "Development Status :: 2 - Pre-Alpha"
+]
+dynamic = ["version"]
+
+[project.scripts]
+instr2ns = "moreniius.nexus_structure:convert"
+
+[tool.setuptools_scm]
+
+[tool.tox]
+legacy_tox_ini = """
+    [tox]
+    min_version = 4.0
+    env_list =
+        py312
+        py311
+        py310
+        py39
+        type
+
+    [testenv]
+    deps =
+        pytest
+        chopcal
+    commands = pytest test
+
+    [testenv:type]
+    deps = mypy
+    commands = mypy src
+"""
