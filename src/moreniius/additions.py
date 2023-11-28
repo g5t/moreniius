@@ -1,5 +1,6 @@
 from zenlog import log
 from .mccode.instance import COMPONENT_TYPE_NAME_TO_NEXUS, register_translator
+from .mccode.comp import monitor_translator
 
 log.info('Patching moreniius.mccode.NXInstance')
 
@@ -211,27 +212,26 @@ def detector_tubes_only_cylinder(self):
     return NXdetector(**pars, geometry=geometry)
 
 
-def histogram_monitor(obj):
-    from nexusformat.nexus import NXmonitor
-    from .utils import ev44_stream_specifier
-    width = obj.nx_parameter('xwidth')
-    height = obj.nx_parameter('yheight')
-    geometry = obj.from_wedge(l=0.005, w1=width, h1=height)
-
-    # parameters to be filled-in
-    pars = {}
-    # pars['data'] = ev44_stream_specifier(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
-    # pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series') else f'{ni} He3 tubes'
-    pars['geometry'] = geometry.to_nexus()
-    return NXmonitor(**pars)
+# def histogram_monitor(obj):
+#     from nexusformat.nexus import NXmonitor
+#     from .nxoff import NXoff
+#     from .utils import ev44_stream_specifier
+#     width = obj.nx_parameter('xwidth')
+#     height = obj.nx_parameter('yheight')
+#     geometry = NXoff.from_wedge(l=0.005, w1=width, h1=height)
+#
+#     # parameters to be filled-in
+#     pars = {}
+#     # pars['data'] = ev44_stream_specifier(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
+#     # pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series') else f'{ni} He3 tubes'
+#     pars['geometry'] = geometry.to_nexus()
+#     return NXmonitor(**pars)
 
 
 # Patch-in the new methods
 register_translator('Readout', readout_translator)
 register_translator('Monochromator_Rowland', monochromator_rowland_translator)
 register_translator('Detector_tubes', detector_tubes_only_cylinder)
-register_translator('Frame_monitor', histogram_monitor)
-register_translator('TOF_monitor', histogram_monitor)
-register_translator('PSD_monitor', histogram_monitor)
+register_translator('Frame_monitor', monitor_translator)
 
 log.info('Patching moreniius.mccode.NXInstance complete')

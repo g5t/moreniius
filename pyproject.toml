@@ -9,6 +9,7 @@ dependencies = [
     'platformdirs==3.11',
     "importlib_metadata; python_version<'3.8'",
     'mccode-antlr[hdf5]==0.2.11',
+    'nexusformat==1.0.2'
 ]
 readme = "README.md"
 authors = [
@@ -39,8 +40,8 @@ legacy_tox_ini = """
     [testenv]
     deps =
         pytest
-        chopcal
-    commands = pytest test
+        git+https://github.com/g5t/mccode-to-kafka.git
+    commands = pytest tests
 
     [testenv:type]
     deps = mypy

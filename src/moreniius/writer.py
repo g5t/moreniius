@@ -115,6 +115,7 @@ class Writer:
                 if obj.nxclass == 'NXfield':
                     # print(f'to_json_dict for NXfield {name=}')
                     typ, val = convert_types(obj.nxdata, only_nx)
+                    # typ is None if obj.nxdata is a NotNXdict (such that val _is_ the contained dict)
                     entry = dict(module='dataset', config=dict(name=name, values=val, type=typ)) if typ else val
                 else:
                     entry = dict(name=name, type='group')
@@ -125,7 +126,7 @@ class Writer:
                     # print(f'to_json_dict for attribute of {name=}, named {n=}')
                     typ, val = convert_types(v, only_nx)
                     if absolute_depends_on and n == 'depends_on' and '/' != val[0]:
-                        val = _to_absolute(top_obj.nxpath, val, name)
+                        val = _to_absolute(top_obj.nxpath, val)
                     attrs.append(dict(name=n, dtype=typ, values=val) if typ else val)
                 if len(attrs):
                     entry['attributes'] = attrs
@@ -138,8 +139,7 @@ class Writer:
         return children
 
 
-def _to_absolute(parent: str, path: str, ourself: str = None):
+def _to_absolute(parent: str, path: str):
     if '.' == path:
         return '.'
-        # return parent if ourself is None else f'{parent}/{ourself}'
     return f'{parent}/{path}'

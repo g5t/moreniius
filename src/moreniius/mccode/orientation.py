@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from zenlog import log
 from dataclasses import dataclass
 from mccode_antlr.instr import Orient, Parts, Part
@@ -39,7 +41,7 @@ class NXPart:
         # handle the case where angle is not a constant?
         return self.make_nx(NXfield, angle, vector=axis, depends_on=dep, transformation_type='rotation', units=angle_unit)
 
-    def transformations(self, name: str, dep: str = None) -> list[tuple[str, NXfield]]:
+    def transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
         if self.o.is_translation and self.o.is_rotation:
             trans = self.translation(dep)
             rot = self.rotation(f'{name}_t')

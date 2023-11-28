@@ -12,7 +12,8 @@ class MorEniius:
     def from_mccode(cls, instr: Instr,
                     origin: str | None = None,
                     only_nx: bool = False,
-                    nxlog_root: str | None = None
+                    nxlog_root: str | None = None,
+                    absolute_depends_on: bool = False
                     ):
         from nexusformat.nexus import NXfield
         from .mccode import NXMcCode, NXInstr
@@ -20,7 +21,7 @@ class MorEniius:
         nx_mccode = NXMcCode(NXInstr(instr, nxlog_root=nxlog_root), origin_name=origin)
         nxs_obj = nx_mccode.instrument(only_nx=only_nx)
         nxs_obj['name'] = NXfield(value=instr.name)
-        return cls(nxs_obj)
+        return cls(nxs_obj, only_nx=only_nx, absolute_depends_on=absolute_depends_on)
 
     def to_nexus_structure(self):
         from .writer import Writer

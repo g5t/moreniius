@@ -25,8 +25,8 @@ def load_instr(filepath: str | Path) -> Instr:
 def to_nexus_structure(instr: Instr) -> dict:
     from moreniius import additions
     from moreniius import MorEniius
-    nx = MorEniius.from_mccode(instr, origin='sample_stack', only_nx=False)
-    return nx.to_nexus_structure(only_nx=False, absolute_depends_on=True)
+    nx = MorEniius.from_mccode(instr, origin='sample_stack', only_nx=False, absolute_depends_on=True)
+    return nx.to_nexus_structure()
 
 
 def convert():
