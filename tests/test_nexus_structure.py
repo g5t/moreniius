@@ -15,11 +15,11 @@ class NexusStrctureTestCase(unittest.TestCase):
         COMPONENT origin = Arm() AT (0, 0, 0) ABSOLUTE
         COMPONENT source = Source_simple() AT (0, 0, 0) RELATIVE origin
         COMPONENT mon0 = TOF_monitor(restore_neutron=1) AT (0, 0, 9) RELATIVE source
-        METADATA "nexus_structure_stream_data" "application/json" %{{{dumps(m0)}%}}
+        METADATA "application/json" "nexus_structure_stream_data" %{{{dumps(m0)}%}}
         COMPONENT ch1 = DiskChopper(theta_0=170, radius=0.35, nu=ch1speed, phase=ch1phase) AT (0, 0, 10) RELATIVE source
         COMPONENT ch2 = DiskChopper(theta_0=170, radius=0.35, nu=ch2speed, phase=ch2phase) AT (0, 0, 0.1) RELATIVE ch1
         COMPONENT mon1 = TOF_monitor(restore_neutron=1) AT (0, 0, 0.1) RELATIVE ch2
-        METADATA "nexus_structure_stream_data" "application/json" %{{{dumps(m1)}%}}
+        METADATA "application/json" "nexus_structure_stream_data" %{{{dumps(m1)}%}}
         COMPONENT sample = Arm() AT (0, 0, 80) RELATIVE ch2
         END
         """
