@@ -2,7 +2,7 @@ from zenlog import log
 from .mccode.instance import COMPONENT_TYPE_NAME_TO_NEXUS, register_translator
 from .mccode.comp import monitor_translator
 
-log.info('Patching moreniius.mccode.NXInstance')
+log.debug('Extending moreniius.mccode.NXInstance translators')
 
 # Tell the converter about missing component(s)
 COMPONENT_TYPE_NAME_TO_NEXUS['ESS_butterfly'] = 'NXmoderator'
@@ -234,4 +234,4 @@ register_translator('Monochromator_Rowland', monochromator_rowland_translator)
 register_translator('Detector_tubes', detector_tubes_only_cylinder)
 register_translator('Frame_monitor', monitor_translator)
 
-log.info('Patching moreniius.mccode.NXInstance complete')
+log.debug('moreniius.mccode.NXInstance translators extended')
