@@ -11,8 +11,8 @@ COMPONENT_TYPE_NAME_TO_NEXUS['ESS_butterfly'] = 'NXmoderator'
 def readout_translator(instance):
     """BIFROST specific Readout Master, should be deprecated in favour of ReadoutCAEN"""
     from nexusformat.nexus import NXgroup
-    from .utils import ev44_stream_specifier
-    stream = ev44_stream_specifier(source='caen', topic='SimulatedEvents')
+    from .utils import ev44_event_data_group
+    stream = ev44_event_data_group(source='caen', topic='SimulatedEvents')
 
     # Somehow define the NXdetector_module ... :/
 
@@ -100,7 +100,7 @@ def bifrost_source_20230704(arc, triplet):
 def detector_tubes_offsets_and_one_cylinder(self):
     import numpy as np
     from nexusformat.nexus import NXdetector, NXfield, NXcylindrical_geometry
-    from .utils import ev44_stream_specifier
+    from .utils import ev44_event_data_group
     # parameters for NXdetector, to be filled-in
     pars = {}
     pixel_fun, wre = bifrost_pixel_regex_20230911()
@@ -131,7 +131,7 @@ def detector_tubes_offsets_and_one_cylinder(self):
 
     pars['detector_number'] = [[pixel_fun(nj, arc, triplet, tube, position) for position in range(nj)] for tube in
                                range(ni)]
-    pars['data'] = ev44_stream_specifier(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
+    pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
     pars['x_pixel_offset'] = NXfield(Di, units='m')
     pars['y_pixel_offset'] = NXfield(Dj, units='m')
     pars['x_pixel_size'] = NXfield(diameter, units='m')
@@ -163,7 +163,7 @@ def detector_tubes_only_cylinder(self):
     """This results in only the first cylinder being plotted by Nexus constructor"""
     import numpy as np
     from nexusformat.nexus import NXdetector, NXfield, NXcylindrical_geometry
-    from .utils import ev44_stream_specifier
+    from .utils import ev44_event_data_group
     # parameters for NXdetector, to be filled-in
     pars = {}
     pixel_fun, wre = bifrost_pixel_regex_20230911()
@@ -204,7 +204,7 @@ def detector_tubes_only_cylinder(self):
     cylinders = [[k, k+1, k+2] for k in [tube * 2 * (nj + 1) + 2 * j for tube in range(ni) for j in range(nj)]]
     detector_number = [pixel_fun(nj, arc, triplet, tube, j) for tube in range(ni) for j in range(nj)]
 
-    pars['data'] = ev44_stream_specifier(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
+    pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
     pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series') else f'{ni} He3 tubes'
 
     geometry = NXcylindrical_geometry(vertices=vertices, cylinders=cylinders, detector_number=detector_number)
@@ -215,14 +215,14 @@ def detector_tubes_only_cylinder(self):
 # def histogram_monitor(obj):
 #     from nexusformat.nexus import NXmonitor
 #     from .nxoff import NXoff
-#     from .utils import ev44_stream_specifier
+#     from .utils import ev44_event_data_group
 #     width = obj.nx_parameter('xwidth')
 #     height = obj.nx_parameter('yheight')
 #     geometry = NXoff.from_wedge(l=0.005, w1=width, h1=height)
 #
 #     # parameters to be filled-in
 #     pars = {}
-#     # pars['data'] = ev44_stream_specifier(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
+#     # pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
 #     # pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series') else f'{ni} He3 tubes'
 #     pars['geometry'] = geometry.to_nexus()
 #     return NXmonitor(**pars)

@@ -1,5 +1,5 @@
 from mccode_antlr.instr import Instance
-
+from nexusformat.nexus import NXevent_data
 
 class NotNXdict:
     """Wrapper class to prevent NXfield-parsing of the held dictionary"""
@@ -139,8 +139,8 @@ def ess_flatbuffer_specifier(module: str, config: dict) -> NotNXdict:
     return NotNXdict({'module': module, 'config': config})
 
 
-def ev44_stream_specifier(source: str, topic: str) -> NotNXdict:
-    """Produce an EV44 specification, the (latest) Event flat buffer identifier used by ESS
+def ev44_event_data_group(source: str, topic: str) -> NXevent_data:
+    """Produce an NXevent_data group with ev44 stream information specified to insert group-elements
 
     Parameters:
         source: str
@@ -148,7 +148,7 @@ def ev44_stream_specifier(source: str, topic: str) -> NotNXdict:
         topic: str
             the name of the Kafka stream on which the to-be-read events are published
     """
-    return ess_flatbuffer_specifier('ev44', {'source': source, 'topic': topic})
+    return NXevent_data(data=ess_flatbuffer_specifier('ev44', {'source': source, 'topic': topic}))
 
 
 def link_specifier(name: str, source: str) -> NotNXdict:
