@@ -34,7 +34,7 @@ def convert():
     import argparse
     parser = argparse.ArgumentParser(description='Convert an Instr (HDF5) or .instr (text) file to an equivalent NeXus Structure JSON string')
     parser.add_argument('filename', type=str, help='the file to convert')
-    parser.add_argument('--format', type=str, default='json', help='the output format, either json or pickle')
+    parser.add_argument('--format', type=str, default='json', help='the output format, currently only json')
     args = parser.parse_args()
     instr = load_instr(args.filename)
     structure = to_nexus_structure(instr)

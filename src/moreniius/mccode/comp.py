@@ -33,6 +33,7 @@ of the NXInstance class; then it can be used 'transparently' without needing to 
 """
 from zenlog import log
 from mccode_antlr.common import Expr
+from moreniius.utils import resolve_parameter_links
 
 
 def slit_translator(nxinstance):
@@ -55,7 +56,8 @@ def slit_translator(nxinstance):
         log.warn(f'{nxinstance.obj.name} has a non-constant x or y zero, which requires special handling for NeXus')
     elif abs(x_zero) or abs(y_zero):
         log.warn(f'{nxinstance.obj.name} should be translated by [{x_zero}, {y_zero}, 0] via eniius_data METADATA')
-    return nxinstance.make_nx(NXslit, x_gap=x_gap, y_gap=y_gap)
+    params = resolve_parameter_links(dict(x_gap=x_gap, y_gap=y_gap))
+    return nxinstance.make_nx(NXslit, **params)
 
 
 def guide_translator(nxinstance):
@@ -64,18 +66,18 @@ def guide_translator(nxinstance):
     off_pars = {k: nxinstance.nx_parameter(k) for k in ('l', 'w1', 'h1', 'w2', 'h2')}
     for k in ('w', 'h'):
         off_pars[f'{k}2'] = off_pars[f'{k}1'] if off_pars[f'{k}2'] == 0 else off_pars[f'{k}2']
-    m_value = nxinstance.parameter('m')
+    guide_pars = {'m_value': nxinstance.parameter('m')}
     geometry = NXoff.from_wedge(**off_pars).to_nexus()
-    return nxinstance.make_nx(NXguide, m_value=m_value, geometry=geometry)
+    return nxinstance.make_nx(NXguide, OFF_GEOMETRY=geometry, **resolve_parameter_links(guide_pars))
 
 
 def collimator_linear_translator(nxinstance):
     from nexusformat.nexus import NXcollimator
     from moreniius.nxoff import NXoff
     pars = {k: nxinstance.nx_parameter(v) for k, v in (('l', 'length'), ('w1', 'xwidth'), ('h1', 'yheight'))}
-    return nxinstance.make_nx(NXcollimator, divergence_x=nxinstance.parameter('divergence'),
-                        divergence_y=nxinstance.parameter('divergenceV'),
-                        geometry=NXoff.from_wedge(**pars).to_nexus())
+    col_pars = dict(divergence_x=nxinstance.parameter('divergence'), divergence_y=nxinstance.parameter('divergenceV'))
+    return nxinstance.make_nx(NXcollimator, OFF_GEOMETRY=NXoff.from_wedge(**pars).to_nexus(),
+                              **resolve_parameter_links(col_pars))
 
 
 def diskchopper_translator(nxinstance):
@@ -90,7 +92,7 @@ def diskchopper_translator(nxinstance):
     nslit, delta = mpars['nslit'], mpars['theta_0'] / 2.0
     slit_edges = [y * 360.0 / nslit + x for y in range(int(nslit)) for x in (-delta, delta)]
     nx_slit_edges = [nxinstance.expr2nx(se) for se in slit_edges]
-    return nxinstance.make_nx(NXdisk_chopper, slit_edges=NXfield(nx_slit_edges, units='degrees'), **pars)
+    return nxinstance.make_nx(NXdisk_chopper, slit_edges=NXfield(nx_slit_edges, units='degrees'), **resolve_parameter_links(pars))
 
 
 def elliptic_guide_gravity_translator(nxinstance):
@@ -123,22 +125,22 @@ def elliptic_guide_gravity_translator(nxinstance):
     nx_vertices = [[nxinstance.expr2nx(expr) for expr in vector] for vector in vertices]
     nx_faces = [[nxinstance.expr2nx(expr) for expr in face] for face in faces]
 
-    return NXguide(geometry=NXoff(nx_vertices, nx_faces).to_nexus())
+    return NXguide(OFF_GEOMETRY=NXoff(nx_vertices, nx_faces).to_nexus())
 
 
 def monitor_translator(nxinstance):
-    from nexusformat.nexus import NXmonitor
+    from nexusformat.nexus import NXmonitor, NXdata
     from moreniius.nxoff import NXoff
     from moreniius.utils import NotNXdict
     from json import loads
     width = nxinstance.nx_parameter('xwidth')
     height = nxinstance.nx_parameter('yheight')
     geometry = NXoff.from_wedge(l=0.005, w1=width, h1=height)
-    nx_monitor = NXmonitor(geometry=geometry.to_nexus())
+    nx_monitor = NXmonitor(OFF_GEOMETRY=geometry.to_nexus())
     if len(nxinstance.obj.metadata):
         # look for mimetype 'application/json' and check if it is NeXus Structure data stream:
         for md in nxinstance.obj.metadata:
             if md.mimetype == 'application/json' and md.name == 'nexus_structure_stream_data':
-                nx_monitor['data'] = NotNXdict(loads(md.value))
+                nx_monitor['data'] = NXdata(data=NotNXdict(loads(md.value)))
 
     return nx_monitor

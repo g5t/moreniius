@@ -78,4 +78,12 @@ class NXInstr:
     def make_nx(self, nx_class, *args, **kwargs):
         nx_args = [self.expr2nx(expr) for expr in args]
         nx_kwargs = {name: self.expr2nx(expr) for name, expr in kwargs.items()}
+        # logged parameters are sometimes requested as NXfield objects, but should be links to the real NXlog
+        if nx_class == NXfield and len(nx_args) == 1 and isinstance(nx_args[0], NXcollection) and \
+                'expression' in nx_args[0]:
+            not_expr = [x for x in nx_args[0] if x != 'expression']
+            if len(not_expr) == 1:
+                return nx_args[0][not_expr[0]]
+            else:
+                raise RuntimeError('Not sure what I should do here')
         return nx_class(*nx_args, **nx_kwargs)

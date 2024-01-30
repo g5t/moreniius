@@ -57,7 +57,10 @@ class NXMcCode:
         from nexusformat.nexus import NXinstrument
         nx = NXinstrument()  # this is a NeXus class
         nx['mcstas'] = self.nx_instr.to_nx()
-        for name in self.indexes:
-            nx[name] = self.component(name, only_nx=only_nx).nx
+        # hack the McCode component index into the name of the NeXus group
+        width = len(str(max(self.indexes.values())))
+        for name, index in self.indexes.items():
+            nx_name = f'{index:0{width}d}_{name}'
+            nx[nx_name] = self.component(name, only_nx=only_nx).nx
 
         return nx

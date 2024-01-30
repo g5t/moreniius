@@ -161,6 +161,9 @@ def link_specifier(name: str, source: str) -> NotNXdict:
         source: str
             the target of the link, the location in the eventual NeXus file where the source of data resides
 
+    Reference:
+    https://gitlab.esss.lu.se/ecdc/ess-dmsc/kafka-to-nexus/-/blob/main/documentation/commands.md?ref_type=heads#links
+
     Examples:
     To produce the link in the following NeXus JSON structure, one would use this function
         {
@@ -189,3 +192,19 @@ def link_specifier(name: str, source: str) -> NotNXdict:
     >>> link_specifier('detector0_event_data', '/entry/instrument/detector_panel_0/event_data')
     """
     return ess_flatbuffer_specifier('link', {'name': name, 'source': source})
+
+
+def resolve_parameter_links(instance_parameters: dict):
+    """Component instances have NeXus base class equivalents that require specifying any number of parameters.
+    Sometimes the McCode parameters are instrument-parameters, which may only be specified at runtime.
+    These component parameters are detectable and should already be replaced by NXfield objects holding NotNXdict
+    objects, in turn specifying the file-writer link module that points to their real NXlog dataset.
+    If the link is singular, it should have its name replaced by the NeXus class parameter so that NeXus programs
+    recognize it correctly.
+    """
+    from nexusformat.nexus import NXfield
+    for name, par in instance_parameters.items():
+        if isinstance(par, NXfield) and isinstance(par.nxdata, NotNXdict) and 'link' == par.nxdata.value['module']:
+            par.nxdata.value['config']['name'] = name
+
+    return instance_parameters

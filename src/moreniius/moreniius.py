@@ -17,7 +17,7 @@ class MorEniius:
                     ):
         from nexusformat.nexus import NXfield
         from .mccode import NXMcCode, NXInstr
-        nxlog_root = nxlog_root or ''
+        nxlog_root = nxlog_root or '/entry/parameters'
         nx_mccode = NXMcCode(NXInstr(instr, nxlog_root=nxlog_root), origin_name=origin)
         nxs_obj = nx_mccode.instrument(only_nx=only_nx)
         nxs_obj['name'] = NXfield(value=instr.name)
