@@ -69,6 +69,7 @@ class NXInstance:
     transforms: dict[str, NXfield]
     only_nx: bool
     nx: Union[None, dict, NXfield] = None
+    dump_mcstas: bool = False
 
     def parameter(self, name):
         """
@@ -111,7 +112,8 @@ class NXInstance:
         from nexusformat.nexus import NXtransformations
         from moreniius.utils import outer_transform_dependency, mccode_component_eniius_data
         self.nx = getattr(self, self.obj.type.name, self.default_translation)()
-        self.nx['mcstas'] = dumps({'instance': str(self.obj), 'order': self.index})
+        if self.dump_mcstas:
+            self.nx['mcstas'] = dumps({'instance': str(self.obj), 'order': self.index})
         if self.transforms:
             self.nx['transformations'] = NXtransformations(**self.transforms)
             most_dependent = outer_transform_dependency(self.nx['transformations'])
