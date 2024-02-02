@@ -1,5 +1,6 @@
 import unittest
 
+# TODO When github.com/g5t/mccode-to-kafka fully switched to using da00, these tests will fail.
 
 class NexusStrctureTestCase(unittest.TestCase):
     def setUp(self):
@@ -24,11 +25,12 @@ class NexusStrctureTestCase(unittest.TestCase):
         END
         """
         self.instr = parse_mcstas_instr(instr)
-        self.structures = {'mon0': m0, 'mon1': m1}
+        self.structures = {'2_mon0': m0, '5_mon1': m1}
 
     def test_moreniius(self):
         from moreniius import MorEniius
         from moreniius.utils import NotNXdict
+        from nexusformat.nexus import NXdata, NXfield
         me = MorEniius.from_mccode(self.instr, origin='sample_stack', only_nx=False, absolute_depends_on=True)
         self.assertTrue(isinstance(me, MorEniius))
         for k in self.structures.keys():
@@ -36,7 +38,9 @@ class NexusStrctureTestCase(unittest.TestCase):
             self.assertTrue('data' in me.nx[k])
             a = me.nx[k]['data']
             self.assertTrue(hasattr(a, 'nxclass'))
-            b = a.nxdata
+            self.assertTrue(isinstance(a, NXdata))
+            self.assertTrue(isinstance(a.data, NXfield))
+            b = a.data.nxdata  # Why did a become an NXdata when it was an NXfield?
             self.assertTrue(isinstance(b, NotNXdict))
             c = b.to_json_dict()
             self.assertTrue(isinstance(c, dict))
@@ -65,10 +69,15 @@ class NexusStrctureTestCase(unittest.TestCase):
         nx = nx['children'][3]
         for x in group_keys:
             self.assertTrue(x in nx)
-        self.assertEqual(nx['name'], 'mon0')
-        self.assertEqual(len(nx['children']), 5)
-        nx = nx['children'][1]
-        self.assertEqual(self.structures['mon0'], nx)
+        self.assertEqual(nx['name'], '2_mon0')
+        self.assertEqual(len(nx['children']), 4)  # removed mcstas child
+        nx = nx['children'][1] # this is now a NXdata group
+        self.assertTrue('attributes' in nx)
+        self.assertEqual(len(nx['attributes']), 1)
+        self.assertEqual(nx['attributes'][0]['name'], 'NX_class')
+        self.assertEqual(nx['attributes'][0]['values'], 'NXdata')
+        nx = nx['children'][0]
+        self.assertEqual(self.structures['2_mon0'], nx)
 
 
 if __name__ == '__main__':
