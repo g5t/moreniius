@@ -28,29 +28,47 @@ def readout_translator(instance):
     total = sum(counts)
     points = [geometry.vertices.shape[0] for _, _, geometry in BIFROST_DETECTOR_MODULES.values()]
     total_points = sum(points)
-    cylinders = ndarray((total, 3), dtype='int32')
-    vertices = ndarray((total_points, 3), dtype='float32')
+    all_cylinders = ndarray((total, 3), dtype='int32')
+    all_vertices = ndarray((total_points, 3), dtype='float32')
     detector_number = ndarray((total,), dtype='int32')
 
     offset = 0
 
     for module_pos, module_rot, geometry in BIFROST_DETECTOR_MODULES.values():
         # Find the vector and rotation matrix linking the two coordinate systems
-        v = instance.instr.expr2nx(tuple((readout_pos - module_pos).position()))  # this is a mccode-antlr Vector
-        R1 = array(instance.instr.expr2nx(tuple(module_rot.inverse().rotation()))).reshape((3, 3))
-        R2 = array(instance.instr.expr2nx(tuple(readout_rot.rotation()))).reshape((3, 3))
         #
-        verts = einsum('ij,kj->ki', R1, geometry.vertices)
-        verts = verts + v
-        verts = einsum('ij,kj->ki', R2, verts)
+        # - The geometry is defined in the module coordinate system, where any point is p' = (x', y', z').
+        # - There is a rotation matrix rot1 that relates a vector in _a_ global coordinate system to the module
+        #   Such that
+        #       x' = rot1 x_global
+        #   Or
+        #       x_global = rot1.inv() x'
+        # - Similarly, there is a rotation matrix rot2 that relates a vector in the same global coordinate system to
+        #   the readout's coordinate system.
+        #       x = rot2 x_global
+        # - In this global coordinate system, the module position and readout positions have a vector connecting them
+        #       v = p_module - p_readout
         #
-        cyls = offset + geometry.cylinders
-        vertices[offset:(offset + verts.shape[0])] = verts
-        cylinders[geometry.detector_number - 1, :] = cyls
+        # - So, to express the geometry in the readout's coordinate system, we convert p' to the global coordinate
+        #   system, add the difference vector between the two coordinate systems, then convert the result to the
+        #   readout coordinate system:
+        #       p = rot2 (v + rot1.inv() p')
+        #
+        v = instance.instr.expr2nx(tuple((module_pos - readout_pos).position()))  # this is a mccode-antlr Vector
+        rot1 = array(instance.instr.expr2nx(tuple(module_rot.inverse().rotation()))).reshape((3, 3))
+        rot2 = array(instance.instr.expr2nx(tuple(readout_rot.rotation()))).reshape((3, 3))
+        #
+        vertices = einsum('ij,kj->ki', rot1, geometry.vertices)
+        vertices = vertices + v
+        vertices = einsum('ij,kj->ki', rot2, vertices)
+        #
+        cylinders = offset + geometry.cylinders
+        all_vertices[offset:(offset + vertices.shape[0])] = vertices
+        all_cylinders[geometry.detector_number - 1, :] = cylinders
         detector_number[geometry.detector_number - 1] = geometry.detector_number
-        offset += verts.shape[0]
+        offset += vertices.shape[0]
 
-    geometry = NXcylindrical_geometry(vertices=vertices, cylinders=cylinders, detector_number=detector_number)
+    geometry = NXcylindrical_geometry(vertices=all_vertices, cylinders=all_cylinders, detector_number=detector_number)
 
     return NXdetector(data=stream, geometry=geometry)
 
@@ -173,7 +191,7 @@ def detector_tubes_offsets_and_one_cylinder(self):
     pars['x_pixel_size'] = NXfield(diameter, units='m')
     pars['y_pixel_size'] = NXfield(height / nj, units='m')
     pars['diameter'] = NXfield(diameter, units='m')
-    pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series') else f'{ni} He3 tubes'
+    pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series', True) else f'{ni} He3 tubes'
 
     # use NXcylindrical_geometry to define the detectors, which requires:
     #   vertices - (i, 3) -- points relative to the detector position defining each cylinder in the detector
@@ -293,7 +311,7 @@ def detector_tubes_only_cylinder(self):
     cylinders = [[k, k+1, k+2] for k in [tube * 2 * (nj + 1) + 2 * j for tube in range(ni) for j in range(nj)]]
     detector_number = [pixel_fun(nj, arc, triplet, tube, j) for tube in range(ni) for j in range(nj)]
 
-    pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series') else f'{ni} He3 tubes'
+    pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series', True) else f'{ni} He3 tubes'
 
     geometry = NXcylindrical_geometry(vertices=vertices, cylinders=cylinders, detector_number=detector_number)
 
@@ -336,6 +354,7 @@ def bifrost_detector_collector(self):
 register_translator('Readout', readout_translator)
 register_translator('Monochromator_Rowland', monochromator_rowland_translator)
 register_translator('Detector_tubes', bifrost_detector_collector)
+register_translator('Detector_time_tubes', bifrost_detector_collector)
 register_translator('Frame_monitor', monitor_translator)
 
 log.debug('moreniius.mccode.NXInstance translators extended')
