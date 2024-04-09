@@ -71,7 +71,7 @@ class NXInstance:
     nx: Union[None, dict, NXfield] = None
     dump_mcstas: bool = False
 
-    def parameter(self, name):
+    def parameter(self, name, default=None):
         """
         Pull out a named instance parameter -- if it's value is not a constant, attempt to evaluate it
         using the Instr declare and initialize sections
@@ -79,7 +79,7 @@ class NXInstance:
         par = self.obj.get_parameter(name)
         if par is None:
             log.warn(f'It appears that {self.obj.type.name} does not define the parameter {name}')
-            return None
+            return default
 
         expr = par.value
         # log.info(f'get parameter {name} which is {par}  and expr {repr(expr)}')
@@ -100,9 +100,9 @@ class NXInstance:
     def expr2nx(self, expr: Expr):
         return self.instr.expr2nx(expr)
 
-    def nx_parameter(self, name):
+    def nx_parameter(self, name, default=None):
         """Retrieve the named instance parameter and convert to a NeXus compatible value"""
-        return self.expr2nx(self.parameter(name))
+        return self.expr2nx(self.parameter(name, default))
 
     def make_nx(self, nx_class, *args, **kwargs):
         return self.instr.make_nx(nx_class, *args, **kwargs)
