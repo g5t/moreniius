@@ -313,8 +313,8 @@ def detector_tubes_only_cylinder(self):
     arc, triplet = analyzer - 1, cassette - 1  # naming from ICD 01 v6 indexing of triplets
 
     vertices = NXfield([v for x in di for y in dj for v in [[x, y, 0], [x, y, radius]]], units='m')
-    cylinders = [[k, k+1, k+2] for k in [tube * 2 * (nj + 1) + 2 * j for tube in range(ni) for j in range(nj)]]
-    detector_number = [pixel_fun(nj, arc, triplet, tube, j) for tube in range(ni) for j in range(nj)]
+    cylinders = np.array([[k, k+1, k+2] for k in [tube * 2 * (nj + 1) + 2 * j for tube in range(ni) for j in range(nj)]]).astype('int32')
+    detector_number = np.array([pixel_fun(nj, arc, triplet, tube, j) for tube in range(ni) for j in range(nj)]).astype('int32')
 
     pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), BIFROST_DETECTOR_TOPIC)
     pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series', True) else f'{ni} He3 tubes'
