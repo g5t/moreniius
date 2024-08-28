@@ -118,6 +118,8 @@ def elliptic_guide_gravity_translator(nxinstance):
         z = x * p['l']
         vertices.extend([[-w, -h, z], [-w, h, z], [w, h, z], [w, -h, z]])
 
+    # These are only the guide faces (that is, the inner faces of the sides of the guide housing)
+    # The entry and exit are not guide faces and therefore are NOT represented here!
     for i in range(n):
         j0, j1, j2, j3, j4, j5, j6, j7 = [4 * i + k for k in range(8)]
         faces.extend([[j0, j1, j5, j4], [j1, j2, j6, j5], [j2, j3, j7, j6], [j3, j0, j4, j7]])

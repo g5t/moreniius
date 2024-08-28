@@ -14,13 +14,15 @@ COMPONENT_TYPE_NAME_TO_NEXUS['ESS_butterfly'] = 'NXmoderator'
 # full detector during the readout-construction.
 BIFROST_DETECTOR_MODULES = {}
 
+BIFROST_DETECTOR_TOPIC = 'bifrost_detector'
+
 
 def readout_translator(instance):
     """BIFROST specific Readout Master, should be deprecated in favour of ReadoutCAEN"""
     from numpy import einsum, ndarray, array
     from nexusformat.nexus import NXdetector, NXcylindrical_geometry
     from .utils import ev44_event_data_group
-    stream = ev44_event_data_group(source='caen', topic='SimulatedEvents')
+    stream = ev44_event_data_group(source='caen', topic=BIFROST_DETECTOR_TOPIC)
 
     readout_pos, readout_rot = instance.obj.orientation.position_parts(), instance.obj.orientation.rotation_parts()
 
@@ -176,16 +178,19 @@ def detector_tubes_offsets_and_one_cylinder(self):
 
     halfi = (width - 2 * radius) / 2
     di = np.linspace(-halfi, halfi, ni)
-    dj = np.linspace(-height / 2, height / 2, nj)
+
+    half_pixel = height / (nj + 1) / 2  # half the size of one pixel along the tube
+    dj = -np.linspace(-height / 2 + half_pixel, height / 2 - half_pixel, nj)
     Dj, Di = np.meshgrid(dj, di)
 
     arc, triplet = analyzer - 1, cassette - 1  # naming from ICD 01 v6 indexing of triplets
 
     diameter = f'2 * {radius}' if isinstance(radius, str) else 2 * radius
 
-    pars['detector_number'] = [[pixel_fun(nj, arc, triplet, tube, position) for position in range(nj)] for tube in
-                               range(ni)]
-    pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
+    detector_number = [[pixel_fun(nj, arc, triplet, tube, position) for position in range(nj)] for tube in range(ni)]
+
+    pars['detector_number'] = np.array(detector_number).astype('int32')
+    pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), BIFROST_DETECTOR_TOPIC)
     pars['x_pixel_offset'] = NXfield(Di, units='m')
     pars['y_pixel_offset'] = NXfield(Dj, units='m')
     pars['x_pixel_size'] = NXfield(diameter, units='m')
@@ -205,8 +210,7 @@ def detector_tubes_offsets_and_one_cylinder(self):
     #   detector_number: (k,) -- maps the cylinders in cylinder by index with a detector id
     #
     # We're allowed to specify a single cylinder then le the x/y/z_offset position that pixel repeatedly:
-    dy = (dj[1] - dj[0]) / 2
-    vertices = NXfield([[0, -dy, 0], [radius, -dy, 0], [0, dy, 0]], units='m')
+    vertices = NXfield([[0, -half_pixel, 0], [radius, -half_pixel, 0], [0, half_pixel, 0]], units='m')
     cylinders = [[0, 1, 2]]
     geometry = NXcylindrical_geometry(vertices=vertices, cylinders=cylinders)
 
@@ -258,7 +262,7 @@ def detector_tubes_offsets_and_one_cylinder(self):
 #     cylinders = [[k, k+1, k+2] for k in [tube * 2 * (nj + 1) + 2 * j for tube in range(ni) for j in range(nj)]]
 #     detector_number = [pixel_fun(nj, arc, triplet, tube, j) for tube in range(ni) for j in range(nj)]
 #
-#     pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
+#     pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), BIFROST_DETECTOR_TOPIC)
 #     pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series') else f'{ni} He3 tubes'
 #
 #     geometry = NXcylindrical_geometry(vertices=vertices, cylinders=cylinders, detector_number=detector_number)
@@ -290,8 +294,9 @@ def detector_tubes_only_cylinder(self):
     nj = self.nx_parameter('no')  # corresponds to 'height' and McStas 'y' axis
     width, height, radius = [self.nx_parameter(n) for n in ('width', 'height', 'radius')]
     halfi = (width - 2 * radius) / 2
+    # signs of di and dj verified by examining plots of detector positions
     di = np.linspace(-halfi, halfi, ni)
-    dj = np.linspace(-height / 2, height / 2, nj+1)
+    dj = -np.linspace(-height / 2, height / 2, nj+1)
 
     # use NXcylindrical_geometry to define the detectors, which requires:
     #   vertices - (i, 3) -- points relative to the detector position defining each cylinder in the detector
@@ -308,9 +313,10 @@ def detector_tubes_only_cylinder(self):
     arc, triplet = analyzer - 1, cassette - 1  # naming from ICD 01 v6 indexing of triplets
 
     vertices = NXfield([v for x in di for y in dj for v in [[x, y, 0], [x, y, radius]]], units='m')
-    cylinders = [[k, k+1, k+2] for k in [tube * 2 * (nj + 1) + 2 * j for tube in range(ni) for j in range(nj)]]
-    detector_number = [pixel_fun(nj, arc, triplet, tube, j) for tube in range(ni) for j in range(nj)]
+    cylinders = np.array([[k, k+1, k+2] for k in [tube * 2 * (nj + 1) + 2 * j for tube in range(ni) for j in range(nj)]]).astype('int32')
+    detector_number = np.array([pixel_fun(nj, arc, triplet, tube, j) for tube in range(ni) for j in range(nj)]).astype('int32')
 
+    pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), BIFROST_DETECTOR_TOPIC)
     pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series', True) else f'{ni} He3 tubes'
 
     geometry = NXcylindrical_geometry(vertices=vertices, cylinders=cylinders, detector_number=detector_number)
@@ -320,13 +326,16 @@ def detector_tubes_only_cylinder(self):
             from nexusformat.nexus import NXdata
             from moreniius.utils import NotNXdict
             from json import loads
-            pars['data'] = NXdata(data=NotNXdict(loads(md.value)))
+            stream = loads(md.value)
+            name = stream.get('module', 'metadata')
+            pars[name] = NXdata(data=NotNXdict(stream))
 
     return NXdetector(**pars, geometry=geometry)
 
 
 def bifrost_detector_collector(self):
-    nx_obj = detector_tubes_only_cylinder(self)
+    # nx_obj = detector_tubes_only_cylinder(self)  # each pixel is a cylinder
+    nx_obj = detector_tubes_offsets_and_one_cylinder(self)  # all pixels share one cylinder
     # stash the object parts
     pos, rot = self.obj.orientation.position_parts(), self.obj.orientation.rotation_parts()
     BIFROST_DETECTOR_MODULES[str(self.obj.when)] = pos, rot, nx_obj.geometry
@@ -344,14 +353,14 @@ def bifrost_detector_collector(self):
 #
 #     # parameters to be filled-in
 #     pars = {}
-#     # pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), 'SimulatedEvents')
+#     # pars['data'] = ev44_event_data_group(bifrost_source_20230704(arc, triplet), BIFROST_DETECTOR_TOPIC)
 #     # pars['type'] = f'{ni} He3 tubes in series' if self.nx_parameter('wires_in_series') else f'{ni} He3 tubes'
 #     pars['geometry'] = geometry.to_nexus()
 #     return NXmonitor(**pars)
 
 
 # Patch-in the new methods
-register_translator('Readout', readout_translator)
+# register_translator('Readout', readout_translator)
 register_translator('Monochromator_Rowland', monochromator_rowland_translator)
 register_translator('Detector_tubes', bifrost_detector_collector)
 register_translator('Detector_time_tubes', bifrost_detector_collector)
