@@ -6,9 +6,12 @@ class NexusStrctureTestCase(unittest.TestCase):
     def setUp(self):
         from json import dumps
         from mccode_antlr.loader import parse_mcstas_instr
-        from mccode_to_kafka.writer import nexus_structure, edge
-        m0 = nexus_structure('mon0', shape=[edge(10, 0.5, 10.5, 't', 'usec', 'monitor')])
-        m1 = nexus_structure('mon1', shape=[edge(10, 1.5, 11.5, 't', 'usec', 'monitor')])
+        from mccode_to_kafka.writer import da00_variable_config, da00_dataarray_config
+        t0 = {'name': 't', 'unit': 'usec', 'label': 'monitor', 'data': {'first': 0.5, 'last': 10.5, 'size': 11}}
+        t1 = {'name': 't', 'unit': 'usec', 'label': 'monitor', 'data': {'first': 1.5, 'last': 11.5, 'size': 11}}
+        m0 = da00_dataarray_config(topic='mon0', source='mccode-to-kafka', constants=[da00_variable_config(**t0)])
+        m1 = da00_dataarray_config(topic='mon1', source='mccode-to-kafka', constants=[da00_variable_config(**t1)])
+
         instr = f"""DEFINE INSTRUMENT chopper_spectrometer(
         ch1speed, ch2speed, ch1phase, ch2phase
         )
