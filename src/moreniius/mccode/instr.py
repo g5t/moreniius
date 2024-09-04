@@ -83,7 +83,8 @@ class NXInstr:
                 'expression' in nx_args[0]:
             not_expr = [x for x in nx_args[0] if x != 'expression']
             if len(not_expr) == 1:
-                return nx_args[0][not_expr[0]]
+                # TODO make this return an nx_class once we're sure that nx_kwargs is parseable (no mccode_antlr.Expr)
+                return nx_class(nx_args[0][not_expr[0]], **nx_kwargs)
             else:
                 raise RuntimeError('Not sure what I should do here')
         return nx_class(*nx_args, **nx_kwargs)

@@ -32,7 +32,14 @@ def outer_transform_dependency(transformations):
     names = list(transformations)
     if len(names) == 1:
         return names[0]
-    depends = {name: getattr(transformations, name).depends_on for name in names}
+    def depends_on_per(name):
+        obj = getattr(transformations, name)
+        if not hasattr(obj, 'depends_on'):
+            raise ValueError(f'{name} in {names} dependency chain missing "depends_on" attribute')
+        return obj.depends_on
+
+    # depends = {name: getattr(transformations, name).depends_on for name in names}
+    depends = {name: depends_on_per(name) for name in names}
     externals = [v for k, v in depends.items() if v not in depends]
     if len(externals) != 1:
         raise RuntimeError(f"Dependency chain {depends} should have one absolute dependency, found {externals} instead")
