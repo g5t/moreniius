@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "moreniius"
 dependencies = [
-    'zenlog==1.1,',
-    'platformdirs==3.11',
+    'zenlog>=1.1',
+    'platformdirs>=3.11',
     "importlib_metadata; python_version<'3.8'",
-    'mccode-antlr[hdf5]==0.7.0',
-    'nexusformat==1.0.6'
+    'mccode-antlr[hdf5]>=0.7.1',
+    'nexusformat>=1.0.6'
 ]
 readme = "README.md"
 authors = [
