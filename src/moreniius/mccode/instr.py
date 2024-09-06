@@ -83,8 +83,24 @@ class NXInstr:
                 'expression' in nx_args[0]:
             not_expr = [x for x in nx_args[0] if x != 'expression']
             if len(not_expr) == 1:
+                not_expr_arg = nx_args[0][not_expr[0]]
+                if isinstance(not_expr_arg, NXfield):
+                    # We have and want an NXfield, but it might be missing attributes specified in the nx_kwargs
+                    # Passing the keywords to the NXfield constructor versus this method is not identical,
+                    # since some keyword arguments are reserved (and only some of which are noted)
+                    #   Explicit keywords, used in the constructor:
+                    #       value, name, shape, dtype, group, attrs
+                    #   Keywords extracted from the kwargs dict, if present (and all controlling HDF5 file attributes?):
+                    #       chunks, compression, compression_opts, fillvalue, fletcher32, maxshape, scaleoffset, shuffle
+                    # For now, just assume all keywords provided here are _actually_ attributes for the NXfield
+                    # which is an extension of a dict, but can *not* use the update method, since the __setitem__
+                    # method is overridden to wrap inputs in NXattr objects :/
+                    for k, v in nx_kwargs.items():
+                        not_expr_arg.attrs[k] = v
+                    return not_expr_arg
+
                 # TODO make this return an nx_class once we're sure that nx_kwargs is parseable (no mccode_antlr.Expr)
-                return nx_class(nx_args[0][not_expr[0]], **nx_kwargs)
+                return nx_class(not_expr_arg, **nx_kwargs)
             else:
                 raise RuntimeError('Not sure what I should do here')
         return nx_class(*nx_args, **nx_kwargs)

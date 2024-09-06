@@ -28,7 +28,6 @@ class NXPart:
         pos = self.o.position()
         if any(isinstance(c, (Expr, Value)) for c in (pos.x, pos.y, pos.z)):
             translations = []
-            print(f'{pos.x=} {pos.y=} {pos.z=}')
             for n, c, v in (('x', pos.x, [1, 0, 0]), ('y', pos.y, [0, 1, 0]), ('z', pos.z, [0, 0, 1])):
                 if c != Expr.parse('0'):
                     next_name = f'{name}_{n}'
@@ -51,7 +50,6 @@ class NXPart:
             print(repr(self.o))
             raise NotImplementedError()
 
-        # print(f'rotation {axis}, {angle}')
         # handle the case where angle is not a constant?
         return self.make_nx(NXfield, angle, vector=axis, depends_on=dep, transformation_type='rotation', units=angle_unit)
 
