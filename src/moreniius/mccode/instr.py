@@ -2,7 +2,7 @@ from zenlog import log
 from dataclasses import dataclass, field
 from mccode_antlr.instr import Instr
 from mccode_antlr.common import Expr
-from nexusformat.nexus import NXfield, NXcollection
+from nexusformat.nexus import NXfield, NXgroup, NXcollection
 
 
 @dataclass
@@ -15,7 +15,8 @@ class NXInstr:
         """Start the C translation to ensure McCode-oddities are handled before any C-code parsing."""
         from mccode_antlr.common import ShapeType, DataType, Value
         from mccode_antlr.translators.target import MCSTAS_GENERATOR
-        from mccode_antlr.translators.c import CTargetVisitor, CDeclaration
+        from mccode_antlr.translators.c import CTargetVisitor
+        from mccode_antlr.translators.c_listener import CDeclarator
         from mccode_antlr.translators.c_listener import evaluate_c_defined_expressions
         config = dict(default_main=True, enable_trace=False, portable=False, include_runtime=True,
                       embed_instrument_file=False, verbose=False, output=None)
@@ -25,9 +26,9 @@ class NXInstr:
         # translator.component_uservars is a dictionary of lists for each component type of `CDeclaration` objects.
 
         # only worry about instrument level variables for the moment, and convert the CDeclarations into Expr objects
-        def c_declaration_to_expr(dec: CDeclaration) -> Expr:
+        def c_declaration_to_expr(dec: CDeclarator) -> Expr:
             expr = Expr(Value(None)) if dec.init is None else Expr.parse(dec.init)
-            expr.data_type = DataType.from_name(dec.type)
+            expr.data_type = DataType.from_name(dec.dtype)
             if dec.is_pointer or dec.is_array:
                 expr.shape_type = ShapeType.vector
             return expr
@@ -84,22 +85,27 @@ class NXInstr:
             not_expr = [x for x in nx_args[0] if x != 'expression']
             if len(not_expr) == 1:
                 not_expr_arg = nx_args[0][not_expr[0]]
-                if isinstance(not_expr_arg, NXfield):
-                    # We have and want an NXfield, but it might be missing attributes specified in the nx_kwargs
-                    # Passing the keywords to the NXfield constructor versus this method is not identical,
-                    # since some keyword arguments are reserved (and only some of which are noted)
-                    #   Explicit keywords, used in the constructor:
-                    #       value, name, shape, dtype, group, attrs
-                    #   Keywords extracted from the kwargs dict, if present (and all controlling HDF5 file attributes?):
-                    #       chunks, compression, compression_opts, fillvalue, fletcher32, maxshape, scaleoffset, shuffle
-                    # For now, just assume all keywords provided here are _actually_ attributes for the NXfield
-                    # which is an extension of a dict, but can *not* use the update method, since the __setitem__
-                    # method is overridden to wrap inputs in NXattr objects :/
-                    for k, v in nx_kwargs.items():
-                        not_expr_arg.attrs[k] = v
-                    return not_expr_arg
+                # if isinstance(not_expr_arg, NXfield):
+                #     # We have and want an NXfield, but it might be missing attributes specified in the nx_kwargs
+                #     # Passing the keywords to the NXfield constructor versus this method is not identical,
+                #     # since some keyword arguments are reserved (and only some of which are noted)
+                #     #   Explicit keywords, used in the constructor:
+                #     #       value, name, shape, dtype, group, attrs
+                #     #   Keywords extracted from the kwargs dict, if present (and all controlling HDF5 file attributes?):
+                #     #       chunks, compression, compression_opts, fillvalue, fletcher32, maxshape, scaleoffset, shuffle
+                #     # For now, just assume all keywords provided here are _actually_ attributes for the NXfield
+                #     # which is an extension of a dict, but can *not* use the update method, since the __setitem__
+                #     # method is overridden to wrap inputs in NXattr objects :/
+                #     for k, v in nx_kwargs.items():
+                #         not_expr_arg.attrs[k] = v
+                #     return not_expr_arg
 
                 # TODO make this return an nx_class once we're sure that nx_kwargs is parseable (no mccode_antlr.Expr)
+                if all(x in not_expr_arg for x in ('module', 'config')):
+                    # This is a file-writer stream directive? So make a group
+                    return NXgroup(entries={not_expr[0]: not_expr_arg}, **nx_kwargs)
+                print('!!')
+                print(not_expr_arg)
                 return nx_class(not_expr_arg, **nx_kwargs)
             else:
                 raise RuntimeError('Not sure what I should do here')

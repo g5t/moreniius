@@ -18,6 +18,7 @@ class NXPart:
         return self.instr.make_nx(nx_class, *args, **kwargs)
 
     def make_translation(self, norm, vec, dep):
+        # if `norm` is a link or NXlog, we should make a group not an NXfield
         return self.make_nx(NXfield, norm, vector=vec, depends_on=dep, transformation_type='translation', units='m')
 
     def translations(self, dep: str, name: str) -> list[tuple[str, NXfield]]:
