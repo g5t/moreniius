@@ -1,5 +1,5 @@
 from mccode_antlr.instr import Instance
-from nexusformat.nexus import NXevent_data
+from nexusformat.nexus import NXevent_data, NXfield
 
 class NotNXdict:
     """Wrapper class to prevent NXfield-parsing of the held dictionary"""
@@ -11,6 +11,10 @@ class NotNXdict:
 
     def __repr__(self):
         return f"NotNXdict<{self.value}>"
+
+    def __str__(self):
+        from json import dumps
+        return dumps(self.value)
 
 
 def outer_transform_dependency(transformations):
@@ -36,7 +40,20 @@ def outer_transform_dependency(transformations):
         obj = getattr(transformations, name)
         if not hasattr(obj, 'depends_on'):
             raise ValueError(f'{name} in {names} dependency chain missing "depends_on" attribute')
-        return obj.depends_on
+        if isinstance(obj.depends_on, NXfield):
+            # obj.depends_on is an NXfield object; which has a number of properties
+            #   nxgroup - the parent group
+            #   dtype - string or numpy dtype
+            #   shape - list or tuple of ints
+            #   attrs - dict of attributes
+            #   nxdata - a scalar or numpy array or string
+            #   nxpath - string, where this object is in the tree
+            #   nxroot - the root NXgroup object containing this object
+            # I _think_ we *always* want the data stored in this object
+            return obj.depends_on.nxdata
+        elif isinstance(obj.depends_on, str):
+            return obj.depends_on
+        raise ValueError(f"depends_on attribute of {name} is not an NXfield or str")
 
     # depends = {name: getattr(transformations, name).depends_on for name in names}
     depends = {name: depends_on_per(name) for name in names}
