@@ -14,13 +14,13 @@ class NXInstr:
     def __post_init__(self):
         """Start the C translation to ensure McCode-oddities are handled before any C-code parsing."""
         from mccode_antlr.common import ShapeType, DataType, Value
-        from mccode_antlr.translators.target import MCSTAS_GENERATOR
+        from mccode_antlr import Flavor
         from mccode_antlr.translators.c import CTargetVisitor
         from mccode_antlr.translators.c_listener import CDeclarator
         from mccode_antlr.translators.c_listener import evaluate_c_defined_expressions
         config = dict(default_main=True, enable_trace=False, portable=False, include_runtime=True,
                       embed_instrument_file=False, verbose=False, output=None)
-        translator = CTargetVisitor(self.instr, generate=MCSTAS_GENERATOR, config=config)
+        translator = CTargetVisitor(self.instr, flavor=Flavor.MCSTAS, config=config)
         # translator.instrument_uservars is a list of `CDeclaration` objects, which are named tuples with
         # fields: name type init is_pointer is_array orig
         # translator.component_uservars is a dictionary of lists for each component type of `CDeclaration` objects.

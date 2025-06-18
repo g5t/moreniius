@@ -150,7 +150,7 @@ def register_translator(name, translator):
     Your translator must be a function with one input, the NXInstance object, and one output, a NeXus object.
     After you have defined your translator function, you can register it with this function.
 
-    >>> import eniius
+    >>> import moreniius
     >>>
     >>> def my_translator(instance):
     >>>     from nexusformat.nexus import NXguide
