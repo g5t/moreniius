@@ -1,10 +1,9 @@
 
 def make_motorized_instrument():
+    from mccode_antlr import Flavor
     from mccode_antlr.assembler import Assembler
-    from mccode_antlr.reader import MCSTAS_REGISTRY, LocalRegistry
-    from mccode_to_kafka.writer import da00_dataarray_config, da00_variable_config
 
-    inst = Assembler('inst', registries=[MCSTAS_REGISTRY])
+    inst = Assembler('inst', flavor=Flavor.MCSTAS)
     inst.parameter('double ex/"m"=0')
     inst.parameter('double phi/"degree"=0')
 
