@@ -9,10 +9,13 @@ def convert_types(obj, only_nx=True):
     if np_data_type.name == 'object':
         if isinstance(obj, ndarray):
             vl = obj.tolist()
-            el = vl[0]
-            for ii in range(1, len(obj.shape)):
-                el = el[0]
-            tp = dtype(type(el)).name
+            if len(vl):
+                el = vl[0]
+                for ii in range(1, len(obj.shape)):
+                    el = el[0]
+                tp = dtype(type(el)).name
+            else:
+                tp = obj.dtype.name
         elif obj is None:
             (tp, vl) = ('string', 'None')
         elif isinstance(obj, NXattr):

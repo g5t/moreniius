@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from mccode_antlr.instr import Instr
 from mccode_antlr.common import Expr
 from nexusformat.nexus import NXfield, NXgroup, NXcollection
+from typing import Union, Any
 
 
 @dataclass
@@ -51,12 +52,11 @@ class NXInstr:
         # quick and very dirty:
         return NXfield(str(self.instr))
 
-    def expr2nx(self, expr: Expr):
+    def expr2nx(self, expr: Union[str, Expr, Any]):
         from moreniius.utils import link_specifier
-        if isinstance(expr, list):
-            return [self.expr2nx(x) for x in expr]
-        if isinstance(expr, tuple):
-            return tuple([self.expr2nx(x) for x in expr])
+        if not isinstance(expr, str) and hasattr(expr, '__iter__'):
+            parts = [self.expr2nx(x) for x in expr]
+            return tuple(parts) if isinstance(expr, tuple) else parts
         if not isinstance(expr, Expr):
             return expr
 
