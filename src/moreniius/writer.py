@@ -26,6 +26,8 @@ def convert_types(obj, only_nx=True):
         elif not only_nx and hasattr(obj, 'to_json_dict'):
             # Shoe-horn in an object-defined dictionary:
             tp, vl = None, obj.to_json_dict()
+        elif not only_nx and hasattr(obj, 'to_dict'):
+            tp, vl = None, obj.to_dict()
         else:
             raise RuntimeError(f'unrecognised type {py_data_type} / {np_data_type} for {repr(obj)}')
     else:
