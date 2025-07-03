@@ -7,7 +7,7 @@ name = "moreniius"
 dependencies = [
     'zenlog>=1.1',
     'platformdirs>=3.11',
-    'mccode-antlr[hdf5]>=0.15.0',
+    'mccode-antlr[hdf5]>=0.15.1',
     'nexusformat>=1.0.6'
 ]
 readme = "README.md"
