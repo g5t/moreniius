@@ -28,7 +28,7 @@ class NexusStrctureTestCase(unittest.TestCase):
         END
         """
         self.instr = parse_mcstas_instr(instr)
-        self.structures = {'2_mon0': m0, '5_mon1': m1}
+        self.structures = {'mon0': m0, 'mon1': m1}
 
     def test_moreniius(self):
         from moreniius import MorEniius
@@ -72,7 +72,7 @@ class NexusStrctureTestCase(unittest.TestCase):
         nx = nx['children'][3]
         for x in group_keys:
             self.assertTrue(x in nx)
-        self.assertEqual(nx['name'], '2_mon0')
+        self.assertEqual(nx['name'], 'mon0')
         self.assertEqual(len(nx['children']), 4)  # removed mcstas child
         nx = nx['children'][1] # this is now a NXdata group
         self.assertTrue('attributes' in nx)
@@ -80,7 +80,7 @@ class NexusStrctureTestCase(unittest.TestCase):
         self.assertEqual(nx['attributes'][0]['name'], 'NX_class')
         self.assertEqual(nx['attributes'][0]['values'], 'NXdata')
         nx = nx['children'][0]
-        self.assertEqual(self.structures['2_mon0'], nx)
+        self.assertEqual(self.structures['mon0'], nx)
 
 
 if __name__ == '__main__':

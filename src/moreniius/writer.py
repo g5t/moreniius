@@ -2,7 +2,7 @@ from zenlog import log
 
 
 def convert_types(obj, only_nx=True):
-    from numpy import dtype, ndarray
+    from numpy import dtype, ndarray, array
     from nexusformat.nexus import NXattr
     py_data_type = type(obj)
     np_data_type = dtype(py_data_type)
@@ -24,11 +24,16 @@ def convert_types(obj, only_nx=True):
                 val = val.tolist()
             if obj.dtype == 'object':
                 (tp, vl) = (dtype(type(obj.nxdata)).name, val)
+                # If still 'object', this will throw an error below
+                if tp == 'object' and isinstance(val, list):
+                    tp = dtype(type(val[0])).name
             else:
                 (tp, vl) = (obj.dtype, val)
         elif not only_nx and hasattr(obj, 'to_json_dict'):
             # Shoe-horn in an object-defined dictionary:
             tp, vl = None, obj.to_json_dict()
+        elif isinstance(obj, list):
+            return convert_types(array(obj))
         else:
             raise RuntimeError(f'unrecognised type {py_data_type} / {np_data_type} for {repr(obj)}')
     else:
@@ -38,7 +43,7 @@ def convert_types(obj, only_nx=True):
     elif tp == 'float64':
         tp = 'double'
     elif tp == 'object':
-        raise RuntimeError(f'Internal logical error attempting to convert {obj}')
+        raise RuntimeError(f'Internal logical error attempting to convert {obj} of type {type(obj)}')
     elif tp == 'int':
         tp = 'int64'
     elif tp == 'float':
@@ -124,8 +129,12 @@ class Writer:
                     attrs = [dict(name='NX_class', dtype='string', values=obj.nxclass)]
                     if len(list(obj)):
                         entry['children'] = self._to_json_dict(obj, only_nx=only_nx, absolute_depends_on=absolute_depends_on)
-                for n, v in obj.attrs.items():
-                    typ, val = convert_types(v, only_nx)
+                for n in obj.attrs:
+                    typ, val = convert_types(obj.attrs[n], only_nx)
+                # FIXME accessing an attribute value via the dict values gives
+                #       a NXattr object *not* the underlying value!?
+                # for n, v in obj.attrs.items():
+                #     typ, val = convert_types(v, only_nx)
                     if absolute_depends_on and n == 'depends_on' and '/' != val[0]:
                         val = _to_absolute(top_obj.nxpath, val)
                     attrs.append(dict(name=n, dtype=typ, values=val) if typ else val)

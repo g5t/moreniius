@@ -8,7 +8,8 @@ dependencies = [
     'zenlog>=1.1',
     'platformdirs>=3.11',
     'mccode-antlr[hdf5]>=0.15.2',
-    'nexusformat>=1.0.6'
+    'nexusformat>=1.0.6',
+    'networkx'
 ]
 readme = "README.md"
 authors = [
@@ -19,7 +20,6 @@ classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -41,7 +41,6 @@ legacy_tox_ini = """
         py312
         py311
         py310
-        py39
         type
 
     [testenv]
