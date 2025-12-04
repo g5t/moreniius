@@ -1,4 +1,5 @@
 from __future__ import annotations
+from networkx import Graph
 from mccode_antlr.instr import Instr
 
 
@@ -13,12 +14,13 @@ class MorEniius:
                     origin: str | None = None,
                     only_nx: bool = False,
                     nxlog_root: str | None = None,
-                    absolute_depends_on: bool = False
+                    absolute_depends_on: bool = False,
+                    graph: Graph | None = None,
                     ):
         from nexusformat.nexus import NXfield
         from .mccode import NXMcCode, NXInstr
         nxlog_root = nxlog_root or '/entry/parameters'
-        nx_mccode = NXMcCode(NXInstr(instr, nxlog_root=nxlog_root), origin_name=origin)
+        nx_mccode = NXMcCode(NXInstr(instr, nxlog_root=nxlog_root), origin_name=origin, graph=graph)
         nxs_obj = nx_mccode.instrument(only_nx=only_nx)
         nxs_obj['name'] = NXfield(value=instr.name)
         return cls(nxs_obj, only_nx=only_nx, absolute_depends_on=absolute_depends_on)
