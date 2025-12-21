@@ -95,27 +95,41 @@ def diskchopper_translator(nxinstance):
     return nxinstance.make_nx(NXdisk_chopper, slit_edges=NXfield(nx_slit_edges, units='degrees'), **resolve_parameter_links(pars))
 
 
-def elliptic_guide_gravity_translator(nxinstance):
-    from nexusformat.nexus import NXguide
-    from numpy import arange, sqrt
-    from moreniius.nxoff import NXoff
-    if not '"mid"' == nxinstance.obj.get_parameter('dimensionsAt'):
-        log.warn('Only midpoint geometry supported by Elliptic_guide_gravity translator')
-        log.info(f'The current guide has {nxinstance.obj.get_parameter("dimensionsAt")} specified')
+def _ellipse_vertices_faces(major_x, minor_x, offset_x, major_y, minor_y, offset_y, l, n=10):
+    """
+    Create vertices and faces for an elliptical guide with given parameters.
 
-    def ellipse_width(minor, distance, at):
-        major = sqrt((distance / 2) ** 2 + minor ** 2)
+    Parameters
+    ----------
+    major_x : float
+        Major axis half-length in the x-direction.
+    minor_x : float
+        Minor axis half-length in the x-direction.
+    offset_x : float
+        Offset from the end of the ellipse to the guide entrance in the x-direction.
+    major_y : float
+        Major axis half-length in the y-direction.
+    minor_y : float
+        Minor axis half-length in the y-direction.
+    offset_y : float
+        Offset from the end of the ellipse to the guide entrance in the y-direction.
+    l : float
+        Length of the guide. l <= 2*major_x - offset_x and l <= 2*major_y - offset_y
+    n : int, optional
+        Number of segments along the length of the guide. Default is 10.
+    """
+    from numpy import arange, sqrt
+
+    def ellipse_width(minor, major, at):
         return 0 if abs(at) > major else minor * sqrt(1 - (at / major) ** 2)
 
-    pars = dict(xw='xwidth', xi='linxw', xo='loutxw', yw='yheight', yi='linyh', yo='loutyh', l='l')
-    p = {k: nxinstance.parameter(v) for k, v in pars.items()}
-    n = 10
     rings = arange(n + 1) / n
     faces, vertices = [], []
     for x in rings:
-        w = ellipse_width(p['xw'] / 2, p['xi'] + p['l'] + p['xo'], p['xi'] / 2 + (x - 0.5) * p['l'] - p['xo'] / 2)
-        h = ellipse_width(p['yw'] / 2, p['yi'] + p['l'] + p['yo'], p['yi'] / 2 + (x - 0.5) * p['l'] - p['yo'] / 2)
-        z = x * p['l']
+        z = x * l
+        w = ellipse_width(minor_x, major_x, offset_x - minor_x + z)
+        h = ellipse_width(minor_y, major_y, offset_y - minor_y + x)
+
         vertices.extend([[-w, -h, z], [-w, h, z], [w, h, z], [w, -h, z]])
 
     # These are only the guide faces (that is, the inner faces of the sides of the guide housing)
@@ -123,6 +137,55 @@ def elliptic_guide_gravity_translator(nxinstance):
     for i in range(n):
         j0, j1, j2, j3, j4, j5, j6, j7 = [4 * i + k for k in range(8)]
         faces.extend([[j0, j1, j5, j4], [j1, j2, j6, j5], [j2, j3, j7, j6], [j3, j0, j4, j7]])
+
+    return vertices, faces
+
+def _ellipse_parameters_from_widths(nxinstance):
+    from numpy import sqrt
+
+    def parameters(which, w, i, o, l):
+        foci = i + l + o
+        offset = foci / 2 - i
+        if 'mid' in which:
+            minor = w / 2
+            major = sqrt(foci ** 2 + minor ** 2) / 2
+        else:
+            t, b = (o, i) if 'entrance' in which else (i, o)
+            t += l
+            w /= 2
+            b = sqrt(b * b + w * w / 4) + sqrt(t * t + w * w / 4)
+            major = b / 2
+            minor = sqrt(b * b - foci * foci) / 2
+        return major, minor, offset
+
+    pars = dict(xw='xwidth', xi='linxw', xo='loutxw', yw='yheight', yi='linyh', yo='loutyh', l='l')
+    p = {k: nxinstance.parameter(v) for k, v in pars.items()}
+
+    dim_at = str(nxinstance.obj.get_parameter('dimensionsAt').value)
+    major_x, minor_x, offset_x = parameters(dim_at, p['xw'], p['xi'], p['xo'], p['l'])
+    major_y, minor_y, offset_y = parameters(dim_at, p['yw'], p['yi'], p['yo'], p['l'])
+
+    return major_x, minor_x, offset_x, major_y, minor_y, offset_y, p['l']
+
+
+def elliptic_guide_gravity_translator(nxinstance):
+    from nexusformat.nexus import NXguide
+    from moreniius.nxoff import NXoff
+
+    ellipse_pars = [f'{f}{s}' for f in ('majorAxis', 'minorAxis', 'majorAxisOffset') for s in ('xw', 'yh')]
+    if all(nxinstance.obj.defines_parameter(p) for p in ellipse_pars):
+        # we can use the specified ellipse parameters directly
+        major_x = nxinstance.parameter('majorAxisxw')
+        minor_x = nxinstance.parameter('minorAxisxw')
+        offset_x = nxinstance.parameter('majorAxisOffsetxw')
+        major_y = nxinstance.parameter('majorAxisyh')
+        minor_y = nxinstance.parameter('minorAxisyh')
+        offset_y = nxinstance.parameter('majorAxisOffsetyh')
+        l = nxinstance.parameter('l')
+    else:
+        major_x, minor_x, offset_x, major_y, minor_y, offset_y, l = _ellipse_parameters_from_widths(nxinstance)
+
+    vertices, faces = _ellipse_vertices_faces(major_x, minor_x, offset_x, major_y, minor_y, offset_y, l, n=10)
 
     nx_vertices = [[nxinstance.expr2nx(expr) for expr in vector] for vector in vertices]
     nx_faces = [[nxinstance.expr2nx(expr) for expr in face] for face in faces]
