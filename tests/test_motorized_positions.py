@@ -51,8 +51,11 @@ def test_motorized_instrument():
     zrot = ns['children'][4]
     aposrot = ns['children'][5]
 
-
-    from json import dumps
+    deps = {
+        'xpos_t0_x': ('.', [1, 0, 0], 'translation'),
+        'zrot_t0_x': ('.', [1, 0, 0], 'translation'),
+        'zrot_r0': ('/entry/instrument/zrot/transformations/zrot_t0_x', [0, 0, 1], 'rotation'),
+    }
 
     for cns in (xpos, zrot, aposrot):
         assert 'children' in cns
@@ -78,11 +81,20 @@ def test_motorized_instrument():
                 assert all(x in c for x in ('name', 'type', 'children', 'attributes'))
                 assert 'group' == c['type']
                 attrs = c['attributes']
-                assert len(attrs) == 1
-                attr = attrs[0]
-                assert all(x in attr for x in ('name', 'dtype', 'values'))
-                assert 'NX_class' == attr['name']
-                assert 'NXgroup' == attr['values']
+                assert len(attrs) == 5
+
+                dep = deps[c['name']]
+                d = {
+                    'NX_class': 'NXgroup',
+                    'depends_on': dep[0],
+                    'vector': dep[1],
+                    'transformation_type': dep[2],
+                    'units': 'm' if dep[2] == 'translation' else 'degrees',
+                }
+                for k, v in d.items():
+                    assert sum(a['name'] == k for a in attrs) == 1
+                    attr = next(a for a in attrs if a['name'] == k)
+                    assert attr['values'] == v
 
                 # The children should contain a link to the log ... is the order important?
                 # Must the number of children always be the same?
@@ -91,20 +103,3 @@ def test_motorized_instrument():
                 for cc in c['children']:
                     if 'link' == cc['module']:
                         assert all(x in cc['config'] for x in ('name', 'source'))
-                    else:
-                        assert all(x in cc['config'] for x in ('name', 'values', 'type'))
-                        assert cc['config']['name'] in ('vector', 'depends_on', 'transformation_type', 'units')
-
-    # for name, has in expected.items():
-    #     print({x : list(ns[x]) for x in ns})
-    #     assert all(x in ns for x in has)
-    #     assert len(ns['children']) == 1
-    #     assert ns['name'] == name
-    #     ns = ns['children'][0]
-
-    #
-    # instr = ns['entry']['instrument']
-    # #
-    # print(dumps(xpos, indent=2))
-    # print(dumps(zrot, indent=1))
-    # print(dumps(aposrot, indent=1))

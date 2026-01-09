@@ -103,7 +103,10 @@ class NXInstr:
                 # TODO make this return an nx_class once we're sure that nx_kwargs is parseable (no mccode_antlr.Expr)
                 if all(x in not_expr_arg for x in ('module', 'config')):
                     # This is a file-writer stream directive? So make a group
-                    return NXgroup(entries={not_expr[0]: not_expr_arg}, **nx_kwargs)
+                    grp = NXgroup(entries={not_expr[0]: not_expr_arg})
+                    for attr, val in nx_kwargs.items():
+                        grp.attrs[attr] = val
+                    return grp
                 print('!!')
                 print(not_expr_arg)
                 return nx_class(not_expr_arg, **nx_kwargs)
