@@ -76,6 +76,9 @@ def test_motorized_instrument():
                 assert len(attrs) == 4
                 assert all(all(x in a for x in ('name', 'values', 'dtype')) for a in attrs)
                 assert all(a['name'] in ('vector', 'depends_on', 'transformation_type', 'units') for a in attrs)
+            elif 'module' in c and 'link' == c['module']:
+                assert 'config' in c
+                assert all(x in c['config'] for x in ('name', 'source'))
             else:
                 # this transformation is dynamic and a group
                 assert all(x in c for x in ('name', 'type', 'children', 'attributes'))
