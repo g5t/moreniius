@@ -8,19 +8,6 @@ from .instr import NXInstr
 
 log.level('error')
 
-# TODO: Refactor this to identify the current (global) position of the chosen origin,
-#       and its orientation (relative to the beam?).
-#       Build a graph of the 'at' and 'rotated' relative relationships (or always
-#       do so in the mccode_antlr.Instr object?)
-#       Record the positions and orientations of all ABSOLUTE components,
-#       offsetting their position by the chosen origin, and correcting for a
-#       possible rotation difference *by* inserting them into the relative graphs.
-#  ----- ^ above are 'done' ------ v below are still needed ----------------------------
-#       Then, when NXtransformations groups are made, follow the 'at' graph to set
-#       the position relative to the origin, and then the 'rotate' graph to set the
-#       orientation -- this should localize any 'motorized' transformation to a single
-#       NXtransformation group, instead of needing to exist in all dependent groups.
-
 @dataclass
 class NXMcCode:
     nx_instr: NXInstr
