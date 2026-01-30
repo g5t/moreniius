@@ -122,6 +122,9 @@ class NXInstance:
                 if not hasattr(self.nx[name], 'depends_on'):
                     self.nx[name].attrs['depends_on'] = most_dependent
                 most_dependent = outer_transform_dependency(self.nx['transformations'])
+            # Note: the depends_on entry for NX class objects is an optional dataset
+            #       in the HDF5 group. Tools like chexus can verify its presence and
+            #       scippnexus only uses the dataset member of a group for this.
             self.nx['depends_on'] = f'transformations/{most_dependent}'
 
     def get_nx_type(self):
@@ -131,7 +134,7 @@ class NXInstance:
             return COMPONENT_CATEGORY_TO_NEXUS[self.obj.type.category]
         if any(self.obj.type.name.startswith(x) for x in COMPONENT_GROUP_TO_NEXUS):
             return [t for k, t in COMPONENT_GROUP_TO_NEXUS.items() if self.obj.type.name.startswith(k)][0]
-        return 'NXnote'
+        return 'NXcoordinate_system' if self.transforms else 'NXnote'
 
     def default_translation(self):
         import nexusformat.nexus as nexus

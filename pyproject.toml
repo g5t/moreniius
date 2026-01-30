@@ -8,7 +8,7 @@ dependencies = [
     'zenlog>=1.1',
     'platformdirs>=3.11',
     'mccode-antlr[hdf5]>=0.17.0',
-    'nexusformat>=1.0.6',
+    'nexusformat>=2.0.0',
     'networkx'
 ]
 readme = "README.md"

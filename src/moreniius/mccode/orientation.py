@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from zenlog import log
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from mccode_antlr.instr import Orient, Parts, Part
 from nexusformat.nexus import NXfield
 from .instr import NXInstr
@@ -73,27 +73,50 @@ class NXParts:
     position: Parts
     rotation: Parts
 
-    def transformations(self, name: str) -> list[tuple[str, NXfield]]:
-        nxt = []
-        dep = '.'
-        for index, o in enumerate(self.position.stack()):
-            nxt.extend(NXPart(self.instr, o).transformations(f'{name}_t{index}', dep))
-            dep = nxt[-1][0] if len(nxt) and len(nxt[-1]) else '.'
-        for index, o in enumerate(self.rotation.stack()):
-            nxt.extend(NXPart(self.instr, o).transformations(f'{name}_r{index}', dep))
-            dep = nxt[-1][0] if len(nxt) and len(nxt[-1]) else '.'
-        return nxt
+    def _transformations(self, name: str, dep: str, typ: str, stack):
+        nx_transformations = []
+        for i, op in enumerate(stack):
+            parts = NXPart(self.instr, op).transformations(f'{name}_{typ}{i}', dep)
+            nx_transformations.extend(parts)
+            if len(parts) and len(parts[-1]):
+                dep = parts[-1][0]
+        return nx_transformations
+
+    def position_transformations(self, name: str, dep: str | None = None ) -> list[tuple[str, NXfield]]:
+        dep = dep or '.'
+        return self._transformations(name, dep, 't', self.position.stack())
+
+    def rotation_transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
+        dep = dep or '.'
+        return self._transformations(name, dep, 'r', self.rotation.stack())
+
+    def transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
+        parts = self.position_transformations(name, dep=dep)
+        dep = parts[-1][0] if len(parts) and len(parts[-1]) else None
+        return parts + self.rotation_transformations(name, dep=dep)
 
 
 @dataclass
 class NXOrient:
     instr: NXInstr
     do: Orient
+    nx_parts: NXParts | None = None
 
-    def transformations(self, name: str) -> dict[str, NXfield]:
+    def __post_init__(self):
         # collapse all possible chained orientation information
         # But keep the rotations and translations separate
         pos, rot = self.do.position_parts(), self.do.rotation_parts()
         # make an ordered list of the requisite NXfield entries
-        nxt = NXParts(self.instr, pos, rot).transformations(name)
-        return {k: v for k, v in nxt}
+        self.nx_parts = NXParts(self.instr, pos, rot)
+
+    def transformations(self, name: str) -> dict[str, NXfield]:
+        # make an ordered list of the requisite NXfield entries, and turn it into a dict
+        return {k: v for k, v in self.nx_parts.transformations(name)}
+
+    def position_transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
+        return self.nx_parts.position_transformations(name, dep)
+
+    def rotation_transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
+        return self.nx_parts.rotation_transformations(name, dep)
+
+

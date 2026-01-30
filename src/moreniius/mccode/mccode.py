@@ -1,3 +1,4 @@
+from nexusformat.nexus import NXfield
 from zenlog import log
 from dataclasses import dataclass, field
 from networkx import DiGraph
@@ -7,6 +8,18 @@ from .instr import NXInstr
 
 log.level('error')
 
+# TODO: Refactor this to identify the current (global) position of the chosen origin,
+#       and its orientation (relative to the beam?).
+#       Build a graph of the 'at' and 'rotated' relative relationships (or always
+#       do so in the mccode_antlr.Instr object?)
+#       Record the positions and orientations of all ABSOLUTE components,
+#       offsetting their position by the chosen origin, and correcting for a
+#       possible rotation difference *by* inserting them into the relative graphs.
+#  ----- ^ above are 'done' ------ v below are still needed ----------------------------
+#       Then, when NXtransformations groups are made, follow the 'at' graph to set
+#       the position relative to the origin, and then the 'rotate' graph to set the
+#       orientation -- this should localize any 'motorized' transformation to a single
+#       NXtransformation group, instead of needing to exist in all dependent groups.
 
 @dataclass
 class NXMcCode:
@@ -19,13 +32,21 @@ class NXMcCode:
 
     def __post_init__(self):
         from copy import deepcopy
+
         for index, instance in enumerate(self.nx_instr.instr.components):
             self.indexes[instance.name] = index
-            self.orientations[instance.name] = deepcopy(instance.orientation)
-        # Attempt to re-center all component dependent orientations on the sample
-        found = (lambda x: self.origin_name == x.name) if self.origin_name else (lambda x: 'samples' == x.type.category)
-        possible_origins = [instance for instance in self.nx_instr.instr.components if found(instance)]
+            # only absolute-positioned or rotated component orientations are needed
+            if instance.at_relative[1] is None or instance.rotate_relative[1] is None:
+                self.orientations[instance.name] = deepcopy(instance.orientation)
 
+        # Attempt to re-center all component dependent orientations on the sample
+        found = (
+            (lambda x: self.origin_name == x.name)
+            if self.origin_name else
+            (lambda x: 'samples' == x.type.category)
+        )
+        possible_origins = [instance for instance in
+                            self.nx_instr.instr.components if found(instance)]
         if not possible_origins:
             msg = '"sample" category components' if self.origin_name is None else f'component named {self.origin_name}'
             log.warn(f'No {msg} in instrument, using ABSOLUTE positions')
@@ -37,18 +58,72 @@ class NXMcCode:
             self.origin_name = possible_origins[0].name
             # find the position _and_ rotation of the origin
             origin = possible_origins[0].orientation
-            # remove this from all components (re-centering on the origin)
-            for name in self.orientations:
-                self.orientations[name] = self.orientations[name] - origin
+            # remove this from all (absolute) components (re-centering on the origin)
+            for name, orientation in self.orientations.items():
+                self.orientations[name] = orientation - origin
 
         if self.graph is None:
             self.graph = self.build_graph()
         if self.reversed_graph is None:
             self.reversed_graph = self.graph.reverse(copy=True)
 
-    def transformations(self, name):
-        from .orientation import NXOrient
-        return NXOrient(self.nx_instr, self.orientations[name]).transformations(name)
+    def transformations(self, name) -> dict[str, NXfield]:
+        from mccode_antlr.instr.orientation import Vector, Angles, Parts
+        from .orientation import NXOrient, NXParts
+
+        def abs_ref(ref):
+            # FIXME find a better way to ensure this is correct
+            return f'/entry/instrument/{ref}'
+
+        def last_ref(refs: list[tuple[str, NXfield]]) -> str | None:
+            try:
+                return next(reversed(refs))[0]
+            except StopIteration:
+                pass
+
+        at_vec, at_rel = self.nx_instr.instr.components[self.indexes[name]].at_relative
+        rot_ang, rot_rel = self.nx_instr.instr.components[self.indexes[name]].rotate_relative
+
+        nx_orientation = None
+        if at_rel is None or rot_rel is None:
+            nx_orientation = NXOrient(self.nx_instr, self.orientations[name])
+
+        if at_rel is None and rot_rel is None:
+            # ABSOLUTE definition, so we pull information from self.orientations
+            # since we had to remove the (possibly different) origin
+            return nx_orientation.transformations(name)
+
+        trans = []
+        if at_rel is not None and rot_rel is not None and at_rel == rot_rel:
+            at_vec = Vector(*at_vec) if isinstance(at_vec, tuple) else at_vec
+            rot_ang = Angles(*rot_ang) if isinstance(rot_ang, tuple) else rot_ang
+            at_parts = Parts.from_at_rotated(at_vec, Angles(), True)
+            rot_parts = Parts.from_at_rotated(Vector(), rot_ang, True)
+            nx_parts = NXParts(self.nx_instr, at_parts, rot_parts)
+            trans.extend(nx_parts.transformations(name, abs_ref(at_rel.name)))
+        else:
+            raise RuntimeError("All mixed reference-type orientations untested. "
+                               "Only 'AT (x, y, z) ABSOLUTE ROTATE (a, b, c) REF' might work")
+        # elif at_rel is None:
+        #     # absolute position with relative rotation
+        #     trans.extend(nx_orientation.position_transformations(name))
+        #     # Get the _rotation_ of the reference to add here before any new rotation
+        #     # FIXME this can only work if rot_rel.name is in self.orientations!
+        #     rel_ori = NXOrient(self.nx_instr, self.orientations[rot_rel.name])
+        #     trans.extend(rel_ori.rotation_transformations(rot_rel.name, last_ref(trans)))
+        #     # Now add our relative rotation onto the referenced rotation
+        #     rot_ang = Angles(*rot_ang) if isinstance(rot_ang, tuple) else rot_ang
+        #     rot = Parts(Parts.from_at_rotated(Vector(), rot_ang, True).stack()).reduce()
+        #     nx_parts = NXParts(self.nx_instr, rot, rot)
+        #     trans.extend(nx_parts.rotation_transformations(name, last_ref(trans)))
+        # elif rot_rel is None:
+        #     # relative position with absolute rotations
+        #     raise RuntimeError("I can not handle this yet")
+        # else:
+        #     # relative position and rotation but different references.
+        #     raise RuntimeError("I cnat no handle this ytet")
+
+        return {k: v for k, v in trans}
 
     def inputs(self, name):
         """Return the other end of edges ending at the named node"""
@@ -64,7 +139,7 @@ class NXMcCode:
         instance = self.nx_instr.instr.components[self.indexes[name]]
         transformations = self.transformations(name)
         nxinst = NXInstance(self.nx_instr, instance, self.indexes[name], transformations, only_nx=only_nx)
-        if transformations and nxinst.nx['transformations'] != transformations:
+        if transformations and nxinst.nx['transformations'] != transformations and name in self.orientations:
             # if the component modifed the transformations group, make sure we don't use our version again
             del self.orientations[name]
         if len(inputs := self.inputs(name)):
