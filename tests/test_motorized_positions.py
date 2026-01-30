@@ -52,8 +52,8 @@ def test_motorized_instrument():
     aposrot = ns['children'][5]
 
     deps = {
-        'xpos_t0_x': ('.', [1, 0, 0], 'translation'),
-        'zrot_t0_x': ('.', [1, 0, 0], 'translation'),
+        'xpos_t0_x': ('/entry/instrument/source', [1, 0, 0], 'translation'),
+        'zrot_t0_x': ('/entry/instrument/xpos', [1, 0, 0], 'translation'),
         'zrot_r0': ('/entry/instrument/zrot/transformations/zrot_t0_x', [0, 0, 1], 'rotation'),
     }
 
@@ -67,7 +67,7 @@ def test_motorized_instrument():
             # Each child can _either_ be a dataset, with 'module' at its top level
             # Or a group, with 'name', etc. at its top level
 
-            if 'module' in c:
+            if 'module' in c and 'dataset' == c['module']:
                 # this transformation is static, and a dataset
                 assert 'dataset' == c['module']
                 assert all(x in c for x in ('config', 'attributes'))
@@ -76,6 +76,9 @@ def test_motorized_instrument():
                 assert len(attrs) == 4
                 assert all(all(x in a for x in ('name', 'values', 'dtype')) for a in attrs)
                 assert all(a['name'] in ('vector', 'depends_on', 'transformation_type', 'units') for a in attrs)
+            elif 'module' in c and 'link' == c['module']:
+                assert 'config' in c
+                assert all(x in c['config'] for x in ('name', 'source'))
             else:
                 # this transformation is dynamic and a group
                 assert all(x in c for x in ('name', 'type', 'children', 'attributes'))

@@ -16,6 +16,10 @@ class NotNXdict:
         from json import dumps
         return dumps(self.value)
 
+    def get(self, item, default=None):
+        return self.value.get(item, default)
+
+
 
 def outer_transform_dependency(transformations):
     """For a NXtransformations group, find the most-dependent transformation name

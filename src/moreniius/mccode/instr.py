@@ -53,7 +53,11 @@ class NXInstr:
         return NXfield(str(self.instr))
 
     def expr2nx(self, expr: Union[str, Expr, Any]):
-        from moreniius.utils import link_specifier
+        from moreniius.utils import link_specifier, NotNXdict
+        if hasattr(expr, '_value') and isinstance(getattr(expr, '_value'), NotNXdict):
+            # Avoid unwrapping the non-NX dictionary at this stage since it is
+            # silently converted to a string-like thing which as an __iter__ property
+            return expr
         if not isinstance(expr, str) and hasattr(expr, '__iter__'):
             parts = [self.expr2nx(x) for x in expr]
             return tuple(parts) if isinstance(expr, tuple) else parts
@@ -77,6 +81,7 @@ class NXInstr:
         return str(expr)
 
     def make_nx(self, nx_class, *args, **kwargs):
+        from moreniius.utils import NotNXdict
         nx_args = [self.expr2nx(expr) for expr in args]
         nx_kwargs = {name: self.expr2nx(expr) for name, expr in kwargs.items()}
         # logged parameters are sometimes requested as NXfield objects, but should be links to the real NXlog
@@ -84,32 +89,36 @@ class NXInstr:
                 'expression' in nx_args[0]:
             not_expr = [x for x in nx_args[0] if x != 'expression']
             if len(not_expr) == 1:
-                not_expr_arg = nx_args[0][not_expr[0]]
-                # if isinstance(not_expr_arg, NXfield):
-                #     # We have and want an NXfield, but it might be missing attributes specified in the nx_kwargs
-                #     # Passing the keywords to the NXfield constructor versus this method is not identical,
-                #     # since some keyword arguments are reserved (and only some of which are noted)
-                #     #   Explicit keywords, used in the constructor:
-                #     #       value, name, shape, dtype, group, attrs
-                #     #   Keywords extracted from the kwargs dict, if present (and all controlling HDF5 file attributes?):
-                #     #       chunks, compression, compression_opts, fillvalue, fletcher32, maxshape, scaleoffset, shuffle
-                #     # For now, just assume all keywords provided here are _actually_ attributes for the NXfield
-                #     # which is an extension of a dict, but can *not* use the update method, since the __setitem__
-                #     # method is overridden to wrap inputs in NXattr objects :/
-                #     for k, v in nx_kwargs.items():
-                #         not_expr_arg.attrs[k] = v
-                #     return not_expr_arg
+                arg = nx_args[0][not_expr[0]]
+                if isinstance(arg, NXfield):
+                    # if this is a link, we should not add any attributes
+                    # since the filewriter will ignore them
+                    if hasattr(arg, '_value') and isinstance(d:=getattr(arg, '_value'), NotNXdict) and d.get('module', '') == 'link':
+                        return arg
+                    # We have and want an NXfield, but it might be missing attributes specified in the nx_kwargs
+                    # Passing the keywords to the NXfield constructor versus this method is not identical,
+                    # since some keyword arguments are reserved (and only some of which are noted)
+                    #   Explicit keywords, used in the constructor:
+                    #       value, name, shape, dtype, group, attrs
+                    #   Keywords extracted from the kwargs dict, if present (and all controlling HDF5 file attributes?):
+                    #       chunks, compression, compression_opts, fillvalue, fletcher32, maxshape, scaleoffset, shuffle
+                    # For now, just assume all keywords provided here are _actually_ attributes for the NXfield
+                    # which is an extension of a dict, but can *not* use the update method, since the __setitem__
+                    # method is overridden to wrap inputs in NXattr objects :/
+                    for k, v in nx_kwargs.items():
+                        arg.attrs[k] = v
+                    return arg
 
                 # TODO make this return an nx_class once we're sure that nx_kwargs is parseable (no mccode_antlr.Expr)
-                if all(x in not_expr_arg for x in ('module', 'config')):
+                if all(x in arg for x in ('module', 'config')):
                     # This is a file-writer stream directive? So make a group
-                    grp = NXgroup(entries={not_expr[0]: not_expr_arg})
+                    grp = NXgroup(entries={not_expr[0]: arg})
                     for attr, val in nx_kwargs.items():
                         grp.attrs[attr] = val
                     return grp
                 print('!!')
-                print(not_expr_arg)
-                return nx_class(not_expr_arg, **nx_kwargs)
+                print(arg)
+                return nx_class(arg, **nx_kwargs)
             else:
                 raise RuntimeError('Not sure what I should do here')
         return nx_class(*nx_args, **nx_kwargs)
