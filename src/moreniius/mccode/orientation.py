@@ -92,7 +92,9 @@ class NXParts:
 
     def transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
         parts = self.position_transformations(name, dep=dep)
-        dep = parts[-1][0] if len(parts) and len(parts[-1]) else None
+        # If there were any positioning transformations, we need to update
+        # the dependency chained name, otherwise it should stay the same
+        dep = parts[-1][0] if len(parts) and len(parts[-1]) else dep
         return parts + self.rotation_transformations(name, dep=dep)
 
 
