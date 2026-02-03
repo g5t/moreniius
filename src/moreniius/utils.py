@@ -1,5 +1,5 @@
 from mccode_antlr.instr import Instance
-from nexusformat.nexus import NXevent_data, NXfield
+from nexusformat.nexus import NXevent_data, NXfield, NXlog
 
 class NotNXdict:
     """Wrapper class to prevent NXfield-parsing of the held dictionary"""
@@ -177,6 +177,26 @@ def ev44_event_data_group(source: str, topic: str) -> NXevent_data:
             the name of the Kafka stream on which the to-be-read events are published
     """
     return NXevent_data(data=ess_flatbuffer_specifier('ev44', {'source': source, 'topic': topic}))
+
+
+def nxlog_data_links(source: str):
+    """
+    Return link module specifications for the datasets inserted by a f144 module
+    """
+    datasets = (
+        'alarm_message', 'alarm_severity', 'alarm_time', 'average_value',
+        'connection_status', 'connection_status_time', 'cue_index',
+        'cue_timestamp_zero', 'description', 'maximum_value', 'minimum_value',
+        'time', 'value'
+    )
+    return {k: link_specifier(k, f'{source}/{k}') for k in datasets}
+
+
+def linked_nxlog(source: str, attrs: dict | None = None) -> NXlog:
+    nxlog = NXlog(**nxlog_data_links(source))
+    if attrs:
+        nxlog.attrs.update(attrs)
+    return nxlog
 
 
 def link_specifier(name: str, source: str) -> NotNXdict:

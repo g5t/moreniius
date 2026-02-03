@@ -53,10 +53,18 @@ class NXInstr:
         return NXfield(str(self.instr))
 
     def expr2nx(self, expr: Union[str, Expr, Any]):
+        """Intended to convert *Expr* objects to NeXus-representable objects"""
+        # FIXME this is called to wrap and re-wrap the same data
+        #       during translation of a component with properties. It may be worth
+        #       separating the parameter and component functionality.
         from moreniius.utils import link_specifier, NotNXdict
+        from nexusformat.nexus import NXlog
         if hasattr(expr, '_value') and isinstance(getattr(expr, '_value'), NotNXdict):
             # Avoid unwrapping the non-NX dictionary at this stage since it is
             # silently converted to a string-like thing which as an __iter__ property
+            return expr
+        if isinstance(expr, NXlog):
+            # Do not decompose a value if we already wrapped it in NXlog
             return expr
         if not isinstance(expr, str) and hasattr(expr, '__iter__'):
             parts = [self.expr2nx(x) for x in expr]
@@ -72,6 +80,10 @@ class NXInstr:
             return evaluated.value
 
         dependencies = [par.name for par in self.instr.parameters if evaluated.depends_on(par.name)]
+        if len(dependencies) == 1 and str(expr) == str(dependencies[0]):
+            from moreniius.utils import linked_nxlog
+            return linked_nxlog(f'{self.nxlog_root}/{dependencies[0]}')
+
         if len(dependencies):
             log.warn(f'The expression {expr} depends on instrument parameter(s) {dependencies}\n'
                      f'A link will be inserted for each; make sure their values are stored at {self.nxlog_root}/')
@@ -81,15 +93,24 @@ class NXInstr:
         return str(expr)
 
     def make_nx(self, nx_class, *args, **kwargs):
+        from nexusformat.nexus import NXlog
         from moreniius.utils import NotNXdict
         nx_args = [self.expr2nx(expr) for expr in args]
         nx_kwargs = {name: self.expr2nx(expr) for name, expr in kwargs.items()}
-        # logged parameters are sometimes requested as NXfield objects, but should be links to the real NXlog
-        if nx_class == NXfield and len(nx_args) == 1 and isinstance(nx_args[0], NXcollection) and \
-                'expression' in nx_args[0]:
-            not_expr = [x for x in nx_args[0] if x != 'expression']
+
+        # logged parameters are sometimes requested as NXfields, but should be NXlogs
+        want_log = nx_class == NXfield and len(nx_args) == 1
+        nx_arg = nx_args[0] if want_log else None
+        if want_log and isinstance(nx_arg, NXlog):
+            # The NXlog returned by expr2nx doesn't have the needed attributes:
+            for k, v in nx_kwargs.items():
+                nx_arg.attrs[k] = v
+            return nx_arg
+        # Hopefully less often, a collection of links in an NXcollection
+        if want_log and isinstance(nx_arg, NXcollection) and 'expression' in nx_arg:
+            not_expr = [x for x in nx_arg if x != 'expression']
             if len(not_expr) == 1:
-                arg = nx_args[0][not_expr[0]]
+                arg = nx_arg[not_expr[0]]
                 if isinstance(arg, NXfield):
                     # if this is a link, we should not add any attributes
                     # since the filewriter will ignore them

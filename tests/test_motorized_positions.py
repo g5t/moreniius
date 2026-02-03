@@ -16,6 +16,21 @@ def make_motorized_instrument():
     return inst.instrument
 
 
+def json_is_nxobj(obj: dict, nxtype: str):
+    if 'type' not in obj or obj['type'] != 'group':
+        return False
+    if 'attributes' not in obj:
+        return False
+    for a in obj['attributes']:
+        if a['name'] == 'NX_class' and a['values'] == nxtype:
+            return True
+    return False
+
+
+def json_is_nxlog(obj: dict):
+    return json_is_nxobj(obj, 'NXlog')
+
+
 def test_motorized_instrument():
     import moreniius
     motorized = make_motorized_instrument()
@@ -53,8 +68,8 @@ def test_motorized_instrument():
 
     deps = {
         'xpos_t0_x': ('/entry/instrument/source', [1, 0, 0], 'translation'),
-        'zrot_t0_x': ('/entry/instrument/xpos', [1, 0, 0], 'translation'),
-        'zrot_r0': ('/entry/instrument/zrot/transformations/zrot_t0_x', [0, 0, 1], 'rotation'),
+        # 'zrot_t0_x': ('/entry/instrument/xpos', [1, 0, 0], 'translation'), # the empty translation is skipped
+        'zrot_r0': ('/entry/instrument/xpos', [0, 0, 1], 'rotation'), # so the rotation depends directly on xpos
     }
 
     for cns in (xpos, zrot, aposrot):
@@ -79,6 +94,30 @@ def test_motorized_instrument():
             elif 'module' in c and 'link' == c['module']:
                 assert 'config' in c
                 assert all(x in c['config'] for x in ('name', 'source'))
+            elif json_is_nxlog(c):
+                attrs = c['attributes']
+                assert len(attrs) == 5
+
+                dep = deps[c['name']]
+                d = {
+                    'depends_on': dep[0],
+                    'vector': dep[1],
+                    'transformation_type': dep[2],
+                    'units': 'm' if dep[2] == 'translation' else 'degrees',
+                }
+                for k, v in d.items():
+                    assert sum(a['name'] == k for a in attrs) == 1
+                    attr = next(a for a in attrs if a['name'] == k)
+                    assert attr['values'] == v
+
+                # The children should contain a links to the log datasets
+                # ... is the order important?
+                assert all('module' in cc for cc in c['children'])
+                assert sum('link' == cc['module'] for cc in c['children']) == 13
+                for cc in c['children']:
+                    if 'link' == cc['module']:
+                        assert all(x in cc['config'] for x in ('name', 'source'))
+
             else:
                 # this transformation is dynamic and a group
                 assert all(x in c for x in ('name', 'type', 'children', 'attributes'))
