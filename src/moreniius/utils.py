@@ -184,10 +184,19 @@ def nxlog_data_links(source: str):
     Return link module specifications for the datasets inserted by a f144 module
     """
     datasets = (
-        'alarm_message', 'alarm_severity', 'alarm_time', 'average_value',
-        'connection_status', 'connection_status_time', 'cue_index',
-        'cue_timestamp_zero', 'description', 'maximum_value', 'minimum_value',
-        'time', 'value'
+        'alarm_message',
+        'alarm_severity',
+        'alarm_time',
+        # 'average_value', # NeXus library failure in kafka-to-nexus
+        'connection_status',
+        'connection_status_time',
+        'cue_index',
+        'cue_timestamp_zero',
+        'description',
+        # 'maximum_value', # NeXus library failure in kafka-to-nexus
+        # 'minimum_value', # NeXus library failure in kafka-to-nexus
+        'time',
+        'value'
     )
     return {k: link_specifier(k, f'{source}/{k}') for k in datasets}
 

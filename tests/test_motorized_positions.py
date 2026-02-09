@@ -113,7 +113,8 @@ def test_motorized_instrument():
                 # The children should contain a links to the log datasets
                 # ... is the order important?
                 assert all('module' in cc for cc in c['children'])
-                assert sum('link' == cc['module'] for cc in c['children']) == 13
+                # TODO: change this test to be more robust against changes in utils.py?
+                assert sum('link' == cc['module'] for cc in c['children']) == 10 
                 for cc in c['children']:
                     if 'link' == cc['module']:
                         assert all(x in cc['config'] for x in ('name', 'source'))
