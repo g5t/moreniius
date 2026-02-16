@@ -10,6 +10,7 @@ from .instr import NXInstr
 COMPONENT_GROUP_TO_NEXUS = dict(Guide='NXguide', Collimator='NXcollimator')
 COMPONENT_CATEGORY_TO_NEXUS = dict(sources='NXmoderator', monitors='NXdetector')
 COMPONENT_TYPE_NAME_TO_NEXUS = dict(
+    Arm='NXcoordinate_system',
     DiskChopper='NXdisk_chopper',
     FermiChopper='NXfermi_chopper',
     FermiChopper_ILL='NXfermi_chopper',
@@ -114,7 +115,9 @@ class NXInstance:
         self.nx = getattr(self, self.obj.type.name, self.default_translation)()
         if self.dump_mcstas:
             self.nx['mcstas'] = dumps({'instance': str(self.obj), 'order': self.index})
-        if self.transforms:
+        if self.transforms and len(self.transforms) == 1 and ((pair := list(self.transforms.items())[0])[1] == NXfield()):
+            self.nx['depends_on'] = pair[0]
+        elif self.transforms:
             self.nx['transformations'] = NXtransformations(**self.transforms)
             most_dependent = outer_transform_dependency(self.nx['transformations'])
             for name, insert in mccode_component_eniius_data(self.obj, only_nx=self.only_nx).items():

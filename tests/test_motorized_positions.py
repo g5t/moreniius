@@ -31,6 +31,11 @@ def json_is_nxlog(obj: dict):
     return json_is_nxobj(obj, 'NXlog')
 
 
+def get_nxlog_link_count():
+    from moreniius.utils import nxlog_data_links
+    return len(nxlog_data_links('fake'))
+
+
 def test_motorized_instrument():
     import moreniius
     motorized = make_motorized_instrument()
@@ -62,14 +67,26 @@ def test_motorized_instrument():
         assert ns['attributes'] == has['attributes']
         assert len(ns['children']) == has['children']
 
-    xpos = ns['children'][3]
-    zrot = ns['children'][4]
-    aposrot = ns['children'][5]
+    def named_child(of, n):
+        """Find a child entry with the specified name."""
+        children = of['children']
+        return next(c for c in children if (cn := c.get('name')) is not None and cn == n)
 
+    # Allow for the order of the children to change, as this is not important
+    xpos, zrot, aposrot = [named_child(ns, x) for x in ('xpos', 'zrot', 'aposrot')]
+
+    # deps = {
+    #     'xpos_t0_x': ('/entry/instrument/source', [1, 0, 0], 'translation'),
+    #     # 'zrot_t0_x': ('/entry/instrument/xpos', [1, 0, 0], 'translation'), # the empty translation is skipped
+    #     'zrot_r0': ('/entry/instrument/xpos', [0, 0, 1], 'rotation'), # so the rotation depends directly on xpos
+    # }
+
+    # /entry/instrumen/source is placed absolutely, so xpos_t0_x's dependency on it
+    # becomes absolute as well.
+    # zrot_r0 depends on xpos, but we look into its transformations group
     deps = {
-        'xpos_t0_x': ('/entry/instrument/source', [1, 0, 0], 'translation'),
-        # 'zrot_t0_x': ('/entry/instrument/xpos', [1, 0, 0], 'translation'), # the empty translation is skipped
-        'zrot_r0': ('/entry/instrument/xpos', [0, 0, 1], 'rotation'), # so the rotation depends directly on xpos
+        'xpos_t0_x': ('.', [1, 0, 0], 'translation'),
+        'zrot_r0': ('/entry/instrument/xpos/transformations/xpos_t0_x', [0, 0, 1], 'rotation'),
     }
 
     for cns in (xpos, zrot, aposrot):
@@ -113,8 +130,8 @@ def test_motorized_instrument():
                 # The children should contain a links to the log datasets
                 # ... is the order important?
                 assert all('module' in cc for cc in c['children'])
-                # TODO: change this test to be more robust against changes in utils.py?
-                assert sum('link' == cc['module'] for cc in c['children']) == 10 
+
+                assert sum('link' == cc['module'] for cc in c['children']) == get_nxlog_link_count()
                 for cc in c['children']:
                     if 'link' == cc['module']:
                         assert all(x in cc['config'] for x in ('name', 'source'))

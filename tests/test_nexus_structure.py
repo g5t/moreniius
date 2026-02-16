@@ -69,7 +69,9 @@ class NexusStrctureTestCase(unittest.TestCase):
             self.assertTrue(x in nx)
         self.assertEqual(nx['name'], 'instrument')
         self.assertEqual(len(nx['children']), 9)
-        nx = nx['children'][3]
+
+        nx = next(c for c in nx['children'] if (z:=c.get('name')) is not None and z == 'mon0')
+
         for x in group_keys:
             self.assertTrue(x in nx)
         self.assertEqual(nx['name'], 'mon0')

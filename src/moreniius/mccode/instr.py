@@ -1,8 +1,10 @@
+from networkx.classes import DiGraph
 from zenlog import log
 from dataclasses import dataclass, field
-from mccode_antlr.instr import Instr
+from mccode_antlr.instr import Instr, Instance
+from mccode_antlr.instr.orientation import Orient
 from mccode_antlr.common import Expr
-from nexusformat.nexus import NXfield, NXgroup, NXcollection
+from nexusformat.nexus import NXfield, NXgroup, NXcollection, NXinstrument
 from typing import Union, Any
 
 
@@ -11,6 +13,12 @@ class NXInstr:
     instr: Instr
     declared: dict[str, Expr] = field(default_factory=dict)
     nxlog_root: str = field(default_factory=str)
+    origin_name: Union[str, None] = None
+    origin: Union[Orient, None] = None
+    nx: Union[NXinstrument, None] = None
+    only_nx: bool = field(default=False)
+    forward_graph: Union[DiGraph, None] = None
+    reverse_graph: Union[DiGraph, None] = None
 
     def __post_init__(self):
         """Start the C translation to ensure McCode-oddities are handled before any C-code parsing."""
@@ -47,6 +55,158 @@ class NXInstr:
                      'This is not an error condition (for now). Continuing')
 
         self.declared = variables
+        #
+        if self.origin is None:
+            self.guess_origin()
+            assert self.origin is not None
+        if self.forward_graph is None:
+            self.forward_graph = self.build_graph()
+        if self.reverse_graph is None:
+            self.reverse_graph = self.forward_graph.reverse(copy=True)
+        #
+        self.make_nx_instrument()
+
+    def guess_origin(self):
+        found = (
+            (lambda x: self.origin_name == x.name)
+            if self.origin_name is not None else
+            (lambda x: 'samples' == x.type.category)
+        )
+        possible = [x for x in self.instr.components if found(x)]
+        if not possible:
+            msg = (
+                '"sample" category components'
+                if self.origin_name is None else
+                f'component named {self.origin_name}'
+            )
+            log.warn(f'No {msg} in instrument, using ABSOLUTE positions')
+        elif self.origin_name is not None and len(possible) > 1:
+            log.error(
+                f'{len(possible)} components named "{self.origin_name}"; using the first'
+            )
+        elif len(possible) > 1:
+            log.warn(
+                'More than one "sample" category component.'
+                f' Using "{possible[0].name}" for origin name'
+            )
+        if possible:
+            self.origin_name = possible[0].name
+            self.origin = possible[0].orientation
+        else:
+            self.origin = Orient()
+
+    def build_graph(self):
+        graph = DiGraph()
+        names = [x.name for x in self.instr.components]
+        graph.add_nodes_from(names)
+        # Default McCode instruments are linear
+        graph.add_edges_from([(names[i], names[i+1]) for i in range(len(names)-1)])
+        return graph
+
+    def inputs(self, name):
+        """Return the other end of edges ending at the named node"""
+        return list(self.reverse_graph[name])
+
+    def outputs(self, name):
+        """Return the other end of edges starting at the named node"""
+        return list(self.forward_graph[name])
+
+    def make_transformations(self, inst: Instance):
+        from mccode_antlr.instr.orientation import Vector, Angles, Parts
+        from .orientation import NXOrient, NXParts
+
+        def abs_ref(ref):
+            return f'/entry/instrument/{ref}'
+
+        def last_ref(refs: list[tuple[str, NXfield]]) -> str | None:
+            try:
+                return next(reversed(refs))[0]
+            except StopIteration:
+                pass
+
+        at_vec, at_rel = inst.at_relative
+        rot_vec, rot_rel = inst.rotate_relative
+
+        any_abs = at_rel is None or rot_rel is None
+        nx_ori = NXOrient(self, inst.orientation - self.origin) if any_abs else None
+        if at_rel is None and rot_rel is None:
+            return nx_ori.transformations(inst.name)
+
+        trans = []
+        if any_abs or at_rel != rot_rel:
+            import warnings
+            warnings.warn(
+                "All mixed-reference-type orientations untested."
+                "Only 'AT (x, y, z) ABSOLUTE ROTATE (a, b, c) REF' might work"
+            )
+        at_vec = Vector(*at_vec) if isinstance(at_vec, tuple) else at_vec
+        rot_vec = Angles(*rot_vec) if isinstance(rot_vec, tuple) else rot_vec
+        if at_rel is None:
+            # Absolute position with relative rotation
+            trans.extend(nx_ori.position_transformations(inst.name))
+            # Get the _rotation_ of the reference to add here before any new rotation
+            rel_ori = NXOrient(self, rot_rel.orientation - self.origin)
+            trans.extend(rel_ori.rotation_transformations(rot_rel.name, last_ref(trans)))
+            # Add the relative rotation onto the reference rotation
+            rot = Parts(Parts.from_at_rotated(Vector(), rot_vec, True).stack()).reduce()
+            nx_parts = NXParts(self, rot, rot)
+            trans.extend(nx_parts.rotation_transformations(inst.name, last_ref(trans)))
+        elif rot_rel is None:
+            raise RuntimeError(
+                "'AT (x, y, z) RELATIVE comp ROTATE (a, b, c) ABSOLUTE'"
+                " not yet implemented"
+            )
+        elif at_rel != rot_rel:
+            raise RuntimeError(
+                "'AT (x, y, z) RELATIVE comp1 ROTATE (a, b, c) RELATIVE comp2'"
+                " not yet implemented"
+            )
+        else:
+            at_parts = Parts.from_at_rotated(at_vec, Angles(), True)
+            rot_parts = Parts.from_at_rotated(Vector(), rot_vec, True)
+            nx_parts = NXParts(self, at_parts, rot_parts)
+            # TODO replace the absolute reference to the component by an
+            #      absolute reference to _its_ `depends_on` target
+            target = abs_ref(at_rel.name)
+            if (depends_on := self.nx.get(at_rel.name)) is not None:
+                if (t := depends_on.get('depends_on')) is not None:
+                    # the relative target has a dependency, so we chain off of that:
+                    if isinstance(t, NXfield):
+                        # TODO what if this isn't a string?
+                        t = str(t)
+                    if t.startswith('/'):
+                        target = t
+                    elif t == '.':
+                        target = None
+                    else:
+                        target = f'{target}/{t}'
+                else:
+                    # the relative target exists but has no dependency, so is absolute
+                    target = None
+            else:
+                raise RuntimeError('transformations defined out of order')
+            trans.extend(nx_parts.transformations(inst.name, target))
+
+        return {k: v for k, v in trans}
+
+    def make_nx_instrument(self):
+        from .instance import NXInstance
+
+        self.nx = NXinstrument()
+        self.nx['name'] = NXfield(value=self.instr.name)
+        self.nx['mcstas'] = self.to_nx()
+
+        for index, inst in enumerate(self.instr.components):
+            transformations = self.make_transformations(inst)
+            nx_inst = NXInstance(self, inst, index, transformations, only_nx=self.only_nx)
+            # add input and outputs
+            if len(inputs := self.inputs(inst.name)):
+                nx_inst.nx.attrs['inputs'] = inputs
+            if len(outputs := self.outputs(inst.name)):
+                nx_inst.nx.attrs['outputs'] = outputs
+            # store the nx instance representation in NeXus
+            self.nx[inst.name] = nx_inst.nx
+
 
     def to_nx(self):
         # quick and very dirty:

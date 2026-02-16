@@ -95,7 +95,12 @@ class NXParts:
         # If there were any positioning transformations, we need to update
         # the dependency chained name, otherwise it should stay the same
         dep = parts[-1][0] if len(parts) and len(parts[-1]) else dep
-        return parts + self.rotation_transformations(name, dep=dep)
+        parts += self.rotation_transformations(name, dep=dep)
+        if dep is not None and len(parts) == 0:
+            # We were told that we should have a relative transformation
+            # but the position and rotation are all zeros!
+            return [(dep, NXfield())]
+        return parts
 
 
 @dataclass
