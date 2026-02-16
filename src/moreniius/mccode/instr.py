@@ -189,21 +189,6 @@ class NXInstr:
 
         return {k: v for k, v in trans}
 
-    # def make_nx_instances(self):
-    #     from .instance import NXInstance
-    #     nx_instances = {}
-    #     for index, inst in enumerate(self.instr.components):
-    #         transformations = self.make_transformations(inst)
-    #         nx_inst = NXInstance(self, inst, index, transformations, only_nx=self.only_nx)
-    #         # add input and outputs
-    #         if len(inputs := self.inputs(inst.name)):
-    #             nx_inst.nx.attrs['inputs'] = inputs
-    #         if len(outputs := self.outputs(inst.name)):
-    #             nx_inst.nx.attrs['outputs'] = outputs
-    #         # store the nx instance
-    #         nx_instances[inst.name] = nx_inst
-    #     return nx_instances
-
     def make_nx_instrument(self):
         from .instance import NXInstance
 
