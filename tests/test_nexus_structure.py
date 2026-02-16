@@ -52,37 +52,51 @@ class NexusStrctureTestCase(unittest.TestCase):
 
     def test_nexus_structure(self):
         from moreniius.nexus_structure import to_nexus_structure
-        nx = to_nexus_structure(self.instr)
-        self.assertTrue(isinstance(nx, dict))
-        self.assertEqual(len(nx), 1)
-        self.assertTrue('children' in nx)
-        self.assertEqual(len(nx['children']), 1)
-        nx = nx['children'][0]
+        from moreniius import NexusStructureNavigator
+        
+        nx_dict = to_nexus_structure(self.instr)
+        self.assertTrue(isinstance(nx_dict, dict))
+        self.assertEqual(len(nx_dict), 1)
+        self.assertTrue('children' in nx_dict)
+        self.assertEqual(len(nx_dict['children']), 1)
+        
+        # Use navigator for cleaner access
+        nav = NexusStructureNavigator(nx_dict)
+        
+        # Check entry
+        entry = nav['entry']
+        self.assertIsInstance(entry, NexusStructureNavigator)
         group_keys = ('name', 'type', 'children', 'attributes')
         for x in group_keys:
-            self.assertTrue(x in nx)
-        self.assertEqual(nx['name'], 'entry')
-        self.assertEqual(nx['type'], 'group')
-        self.assertEqual(len(nx['children']), 1)
-        nx = nx['children'][0]
+            self.assertTrue(x in entry.structure)
+        self.assertEqual(entry.structure['name'], 'entry')
+        self.assertEqual(entry.structure['type'], 'group')
+        self.assertEqual(len(entry.structure['children']), 1)
+        
+        # Check instrument
+        instrument = nav['entry']['instrument']
         for x in group_keys:
-            self.assertTrue(x in nx)
-        self.assertEqual(nx['name'], 'instrument')
-        self.assertEqual(len(nx['children']), 9)
-
-        nx = next(c for c in nx['children'] if (z:=c.get('name')) is not None and z == 'mon0')
-
+            self.assertTrue(x in instrument.structure)
+        self.assertEqual(instrument.structure['name'], 'instrument')
+        self.assertEqual(len(instrument.structure['children']), 9)
+        
+        # Check mon0
+        mon0 = nav['entry']['instrument']['mon0']
         for x in group_keys:
-            self.assertTrue(x in nx)
-        self.assertEqual(nx['name'], 'mon0')
-        self.assertEqual(len(nx['children']), 4)  # removed mcstas child
-        nx = nx['children'][1] # this is now a NXdata group
-        self.assertTrue('attributes' in nx)
-        self.assertEqual(len(nx['attributes']), 1)
-        self.assertEqual(nx['attributes'][0]['name'], 'NX_class')
-        self.assertEqual(nx['attributes'][0]['values'], 'NXdata')
-        nx = nx['children'][0]
-        self.assertEqual(self.structures['mon0'], nx)
+            self.assertTrue(x in mon0.structure)
+        self.assertEqual(mon0.structure['name'], 'mon0')
+        self.assertEqual(len(mon0.structure['children']), 4)  # removed mcstas child
+        
+        # Check NXdata group (second child)
+        nxdata = mon0.structure['children'][1]  # this is now a NXdata group
+        self.assertTrue('attributes' in nxdata)
+        self.assertEqual(len(nxdata['attributes']), 1)
+        self.assertEqual(nxdata['attributes'][0]['name'], 'NX_class')
+        self.assertEqual(nxdata['attributes'][0]['values'], 'NXdata')
+        
+        # Check the structure data
+        structure_data = nxdata['children'][0]
+        self.assertEqual(self.structures['mon0'], structure_data)
 
 
 if __name__ == '__main__':

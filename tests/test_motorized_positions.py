@@ -38,42 +38,37 @@ def get_nxlog_link_count():
 
 def test_motorized_instrument():
     import moreniius
+    from moreniius import NexusStructureNavigator
+    
     motorized = make_motorized_instrument()
     nx = moreniius.MorEniius.from_mccode(motorized, origin='origin', only_nx=False, absolute_depends_on=True)
     assert nx is not None
-    #TODO add actual tests for the contents of, e.g., the dumped NeXus Structure
-    ns = nx.to_nexus_structure()
+    
+    ns_dict = nx.to_nexus_structure()
+    nav = NexusStructureNavigator(ns_dict)
 
-    expected = {
-        'entry': {
-            'type': 'group',
-            'children': 1,
-            'next': 0,
-            'attributes': [{'name': 'NX_class', 'dtype': 'string', 'values': 'NXentry'}]
-        },
-        'instrument': {
-            'type': 'group',
-            'children': 7,
-            'next': 0,
-            'attributes': [{'name': 'NX_class', 'dtype': 'string', 'values': 'NXinstrument'}]
-        },
-    }
-    for name, has in expected.items():
-        assert 'children' in ns
-        assert len(ns['children']) >= has['next']
-        ns = ns['children'][has['next']]
-        assert all(x in ns for x in ('type', 'name', 'children', 'attributes'))
-        assert ns['name'] == name
-        assert ns['attributes'] == has['attributes']
-        assert len(ns['children']) == has['children']
+    # Check entry level
+    entry = nav['entry']
+    assert entry.structure['name'] == 'entry'
+    assert entry.structure['type'] == 'group'
+    assert len(entry.structure['children']) == 1
+    
+    entry_nx_class = entry['@NX_class']
+    assert entry_nx_class == {'name': 'NX_class', 'dtype': 'string', 'values': 'NXentry'}
 
-    def named_child(of, n):
-        """Find a child entry with the specified name."""
-        children = of['children']
-        return next(c for c in children if (cn := c.get('name')) is not None and cn == n)
+    # Check instrument level
+    instrument = nav['entry']['instrument']
+    assert instrument.structure['name'] == 'instrument'
+    assert instrument.structure['type'] == 'group'
+    assert len(instrument.structure['children']) == 7
+    
+    instrument_nx_class = instrument['@NX_class']
+    assert instrument_nx_class == {'name': 'NX_class', 'dtype': 'string', 'values': 'NXinstrument'}
 
-    # Allow for the order of the children to change, as this is not important
-    xpos, zrot, aposrot = [named_child(ns, x) for x in ('xpos', 'zrot', 'aposrot')]
+    # Access components directly by name using navigator
+    xpos = nav['entry']['instrument']['xpos']
+    zrot = nav['entry']['instrument']['zrot']
+    aposrot = nav['entry']['instrument']['aposrot']
 
     # deps = {
     #     'xpos_t0_x': ('/entry/instrument/source', [1, 0, 0], 'translation'),
@@ -89,7 +84,8 @@ def test_motorized_instrument():
         'zrot_r0': ('/entry/instrument/xpos/transformations/xpos_t0_x', [0, 0, 1], 'rotation'),
     }
 
-    for cns in (xpos, zrot, aposrot):
+    for cns_nav in (xpos, zrot, aposrot):
+        cns = cns_nav.structure
         assert 'children' in cns
         assert 'transformations' in [c['name'] for c in cns['children'] if 'name' in c]
         t = [c for c in cns['children'] if 'name' in c and c['name'] == 'transformations'][0]

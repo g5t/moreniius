@@ -114,34 +114,32 @@ def test_elliptic_guide_geometry_has_vertices_and_faces():
 def test_elliptic_guide_nexus_structure():
     """Test that the elliptic guide is correctly represented in NeXus structure output."""
     import moreniius
+    from moreniius import NexusStructureNavigator
 
     instr = make_elliptic_guide_instrument(use_explicit_ellipse_pars=True)
     me = moreniius.MorEniius.from_mccode(
         instr, origin='origin', only_nx=False, absolute_depends_on=True
     )
 
-    ns = me.to_nexus_structure()
+    ns_dict = me.to_nexus_structure()
+    
+    # Use navigator for cleaner access
+    nav = NexusStructureNavigator(ns_dict)
 
-    # Navigate to the instrument level
-    assert 'children' in ns
-    entry = ns['children'][0]
-    assert entry['name'] == 'entry'
+    # Navigate to entry and instrument
+    entry = nav['entry']
+    assert entry.structure['name'] == 'entry'
 
-    instrument = entry['children'][0]
-    assert instrument['name'] == 'instrument'
+    instrument = nav['entry']['instrument']
+    assert instrument.structure['name'] == 'instrument'
 
-    # Find the elliptic_guide component
-    guide_groups = [c for c in instrument['children'] if c.get('name') == 'elliptic_guide']
-    assert len(guide_groups) == 1
+    # Access the elliptic_guide component directly by name
+    guide = nav['entry']['instrument']['elliptic_guide']
+    assert guide.structure['type'] == 'group'
 
-    guide = guide_groups[0]
-    assert guide['type'] == 'group'
-
-    # Check that it has the NXguide class attribute
-    guide_attrs = guide.get('attributes', [])
-    class_attrs = [a for a in guide_attrs if a.get('name') == 'NX_class']
-    assert len(class_attrs) == 1
-    assert class_attrs[0]['values'] == 'NXguide'
+    # Check that it has the NXguide class attribute using navigator
+    nx_class_attr = guide['@NX_class']
+    assert nx_class_attr['values'] == 'NXguide'
 
 
 def test_ellipse_vertices_faces_function():
