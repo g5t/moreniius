@@ -6,17 +6,24 @@ def get_bifrost_instr():
     return load_json(file)
 
 def test_bifrost_nexus_structure():
-    # from pathlib import Path
-    # from json import dump
-    from moreniius import MorEniius
+    from moreniius import MorEniius, NexusStructureNavigator
+    
     instr = get_bifrost_instr()
     me = MorEniius.from_mccode(instr, origin='sample_origin', only_nx=False, absolute_depends_on=False)
-    ns = me.to_nexus_structure()
+    ns_dict = me.to_nexus_structure()
+    
+    # Use navigator for cleaner access
+    nav = NexusStructureNavigator(ns_dict)
 
-    # jq path to pulse_shaping_chopper_1's rotation_speed
-    #.children[0].children[0].children[12].children[2]
-    obj = ns['children'][0]['children'][0]['children'][12]['children'][2]
-
+    # Old path: .children[0].children[0].children[12].children[2]
+    # Navigate to pulse_shaping_chopper_1's rotation_speed
+    entry = nav['entry']
+    instrument = entry['instrument']
+    
+    # Get child #12 (pulse_shaping_chopper_1) and its child #2 (rotation_speed)
+    # Since we don't know the exact name, fall back to index access for this specific case
+    pulse_chopper = instrument.structure['children'][12]
+    obj = pulse_chopper['children'][2]
 
     assert 'type' in obj
     assert obj['type'] == 'group'
@@ -29,23 +36,25 @@ def test_bifrost_nexus_structure():
         assert child['config']['name'] == child['config']['source'].split('/')[-1]
 
     # The channel-5 arm is oriented 0-degrees rotated from the tank rotation angle
-    # and _should_ be a NXccordinate_system directly dependent on that NXlog'ed value
-    # jless finds it at .children[0].children[0].children[255]
-    arm = ns['children'][0]['children'][0]['children'][255]
-    assert 'type' in arm
-    assert arm['type'] == 'group'
-    assert 'name' in arm
-    assert arm['name'] == 'channel_5_arm'
+    # and _should_ be a NXcoordinate_system directly dependent on that NXlog'ed value
+    # Old path: .children[0].children[0].children[255]
+    arm_dict = instrument.structure['children'][255]
+    assert 'type' in arm_dict
+    assert arm_dict['type'] == 'group'
+    assert 'name' in arm_dict
+    assert arm_dict['name'] == 'channel_5_arm'
+    
+    # Could also access by name if it's unique
+    channel_5_arm = nav['entry']['instrument']['channel_5_arm']
+    assert channel_5_arm.structure['name'] == 'channel_5_arm'
 
-    assert 'attributes' in arm
-    class_name = None
-    for attribute in arm['attributes']:
-        if (n := attribute.get('name')) is not None and n == 'NX_class':
-            class_name = attribute['values']
-    assert class_name == 'NXcoordinate_system'
+    # Check attributes using navigator
+    nx_class_attr = channel_5_arm['@NX_class']
+    assert nx_class_attr['values'] == 'NXcoordinate_system'
 
-    assert 'children' in arm
-    for child in arm['children']:
+    # Check children for depends_on
+    assert 'children' in channel_5_arm.structure
+    for child in channel_5_arm.structure['children']:
         if (m := child.get('module')) is not None and m == 'dataset':
             assert 'config' in child
             if (n := child['config'].get('name')) is not None and n == 'depends_on':
