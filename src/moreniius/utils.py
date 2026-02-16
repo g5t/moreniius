@@ -187,7 +187,7 @@ def nxlog_data_links(source: str):
         'alarm_message',
         'alarm_severity',
         'alarm_time',
-        # 'average_value', # NeXus library failure in kafka-to-nexus
+        # 'average_value', # NeXus library failure in kafka-to-nexus:
         'connection_status',
         'connection_status_time',
         'cue_index',

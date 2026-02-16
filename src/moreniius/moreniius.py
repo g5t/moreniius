@@ -17,13 +17,10 @@ class MorEniius:
                     absolute_depends_on: bool = False,
                     graph: Graph | None = None,
                     ):
-        from nexusformat.nexus import NXfield
-        from .mccode import NXMcCode, NXInstr
+        from .mccode import NXInstr
         nxlog_root = nxlog_root or '/entry/parameters'
-        nx_mccode = NXMcCode(NXInstr(instr, nxlog_root=nxlog_root), origin_name=origin, graph=graph)
-        nxs_obj = nx_mccode.instrument(only_nx=only_nx)
-        nxs_obj['name'] = NXfield(value=instr.name)
-        return cls(nxs_obj, only_nx=only_nx, absolute_depends_on=absolute_depends_on)
+        nx_instr = NXInstr(instr, nxlog_root=nxlog_root, origin_name=origin, forward_graph=graph, only_nx=only_nx)
+        return cls(nx_instr.nx, only_nx=only_nx, absolute_depends_on=absolute_depends_on)
 
     def to_nexus_structure(self):
         from .writer import Writer
