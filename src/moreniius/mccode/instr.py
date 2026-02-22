@@ -218,13 +218,13 @@ class NXInstr:
         #       during translation of a component with properties. It may be worth
         #       separating the parameter and component functionality.
         from moreniius.utils import link_specifier, NotNXdict
-        from nexusformat.nexus import NXlog
+        from nexusformat.nexus import NXlog, NXfield
         if hasattr(expr, '_value') and isinstance(getattr(expr, '_value'), NotNXdict):
             # Avoid unwrapping the non-NX dictionary at this stage since it is
             # silently converted to a string-like thing which as an __iter__ property
             return expr
-        if isinstance(expr, NXlog):
-            # Do not decompose a value if we already wrapped it in NXlog
+        if isinstance(expr, (NXlog, NXfield)):
+            # Do not decompose a value if we already wrapped it in NXlog/...
             return expr
         if not isinstance(expr, str) and hasattr(expr, '__iter__'):
             parts = [self.expr2nx(x) for x in expr]

@@ -1,3 +1,5 @@
+from moreniius import NexusStructureNavigator
+
 
 def get_bifrost_instr():
     from mccode_antlr.io.json import load_json
@@ -60,3 +62,85 @@ def test_bifrost_nexus_structure():
             if (n := child['config'].get('name')) is not None and n == 'depends_on':
                 # Check for the actual named group?
                 assert child['config']['values'].startswith('/')
+
+
+def is_typed_dataset(obj, typ):
+    if 'module' not in obj or obj['module'] is None or obj['module'] != 'dataset':
+        return False
+    if 'config' not in obj or obj['config'] is None or 'values' not in obj['config']:
+        return False
+    return isinstance(obj['config']['values'], typ)
+
+def is_typed_array_dataset(obj, typ, shape: list[int]):
+    """
+    Check if a NeXus Structure JSON object is a static dataset
+    representing an array of the specified type and shape.
+
+    Parameters
+    ----------
+    obj : dict
+        The JSON object resulting from, e.g., the Navigator's getitem instance
+    typ: typename
+        The type of the dataset to check
+    shape: list[int]
+        The shape of the dataset to check -- C-ordered, [innermost, ..., outermost]
+    """
+    if not is_typed_dataset(obj, list):
+        return False
+    values = obj['config']['values']
+    sh = []
+    while hasattr(values, '__len__'):
+        sh.append(len(values))
+        values = values[0]
+    if not isinstance(values, typ):
+        return False
+    return list(reversed(sh)) == shape
+
+
+def is_nxlog_group(loc):
+    """
+    Check if a NeXus Structure JSON object Navigator location is a NXlog group
+
+    Parameters
+    loc: NavigatorStructureNavigator
+        A navigated-to location that should be an NXlog group
+    """
+    from moreniius import NexusStructureNavigator
+    if not isinstance(loc, NexusStructureNavigator):
+        return False
+    if 'type' not in loc.structure or loc.structure['type'] != 'group':
+        return False
+    return loc['@NX_class']['values'] == 'NXlog'
+
+
+def test_bifrost_choppers_have_necessary_parameters():
+    from moreniius import MorEniius, NexusStructureNavigator
+
+    instr = get_bifrost_instr()
+    me = MorEniius.from_mccode(instr, origin='sample_origin', only_nx=False,
+                               absolute_depends_on=False)
+    ns_dict = me.to_nexus_structure()
+
+    # Use navigator for cleaner access
+    nav = NexusStructureNavigator(ns_dict)
+
+    choppers = (
+        'pulse_shaping_chopper_1', 'pulse_shaping_chopper_2',
+        'frame_overlap_chopper_1', 'frame_overlap_chopper_2',
+        'bandwidth_chopper_1', 'bandwidth_chopper_2',
+    )
+    for name in choppers:
+        chopper = nav['entry/instrument'][name]
+        assert chopper.structure['type'] == 'group'
+        assert chopper['@NX_class']['values'] == 'NXdisk_chopper'
+
+        # Every chopper needs to have static datasets:
+        for prop, typ in (('slits', int), ('radius', float), ('slit_angle', float), ('slit_height', float)):
+            assert is_typed_dataset(chopper[prop], typ)
+        # the slit angles should be an even number of values (or always 2 for BIFROST)
+        assert is_typed_array_dataset(chopper['slit_edges'], float, [2])
+
+        # And the speed and phase (for McStas simulations) should be NXlogs
+        for prop in ('rotation_speed', 'phase'):
+            assert is_nxlog_group(chopper[prop])
+
