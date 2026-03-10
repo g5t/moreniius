@@ -7,9 +7,9 @@ name = "moreniius"
 dependencies = [
     'zenlog>=1.1',
     'platformdirs>=3.11',
-    'mccode-antlr[hdf5]>=0.18.4',
+    "mccode-antlr[hdf5]>=0.19.0",
     'nexusformat>=2.0.0',
-    'networkx'
+    'networkx',
 ]
 readme = "README.md"
 authors = [
@@ -27,6 +27,9 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dynamic = ["version"]
+
+[project.optional-dependencies]
+test = ['pytest', 'niess', 'mccode-to-kafka']
 
 [project.scripts]
 instr2ns = "moreniius.nexus_structure:convert"
@@ -55,3 +58,4 @@ legacy_tox_ini = """
     deps = mypy
     commands = mypy src
 """
+

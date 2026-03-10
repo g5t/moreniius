@@ -23,14 +23,14 @@ class NXPart:
 
     def translations(self, dep: str, name: str) -> list[tuple[str, NXfield]]:
         from mccode_antlr.instr import RotationPart
-        from mccode_antlr.common import Expr, Value
+        from mccode_antlr.common import Expr
         if isinstance(self.o, RotationPart):
             raise RuntimeError('Part is a rotation!')
         pos = self.o.position()
-        if any(isinstance(c, (Expr, Value)) for c in (pos.x, pos.y, pos.z)):
+        if any(isinstance(c, Expr) for c in (pos.x, pos.y, pos.z)):
             translations = []
             for n, c, v in (('x', pos.x, [1, 0, 0]), ('y', pos.y, [0, 1, 0]), ('z', pos.z, [0, 0, 1])):
-                if c != Expr.parse('0'):
+                if not c.is_zero:
                     next_name = f'{name}_{n}'
                     translations.append((next_name, self.make_translation(c, v, dep)))
                     dep = next_name

@@ -39,18 +39,22 @@ from moreniius.utils import resolve_parameter_links
 def slit_translator(nxinstance):
     """The Slit component _must_ define (xmin, xmax) _or_ xwidth, and similarly the y-named parameters"""
     from nexusformat.nexus import NXslit
+
+    def f(name):
+        return nxinstance.parameter(name, dtype=float)
+
     if nxinstance.obj.defines_parameter('xwidth'):
-        x_gap = nxinstance.parameter('xwidth')
+        x_gap = f('xwidth')
         x_zero = Expr.float(0)
     else:
-        x_gap = nxinstance.parameter('xmax') - nxinstance.parameter('xmin')
-        x_zero = nxinstance.parameter('xmax') + nxinstance.parameter('xmin')
+        x_gap = f('xmax') - f('xmin')
+        x_zero = f('xmax') + f('xmin')
     if nxinstance.obj.defines_parameter('ywidth'):
-        y_gap = nxinstance.parameter('ywidth')
+        y_gap = f('ywidth')
         y_zero = Expr.float(0)
     else:
-        y_gap = nxinstance.parameter('ymax') - nxinstance.parameter('ymin')
-        y_zero = nxinstance.parameter('ymax') + nxinstance.parameter('ymin')
+        y_gap = f('ymax') - f('ymin')
+        y_zero = f('ymax') + f('ymin')
 
     if isinstance(x_zero, Expr) or isinstance(y_zero, Expr):
         log.warn(f'{nxinstance.obj.name} has a non-constant x or y zero, which requires special handling for NeXus')
@@ -63,10 +67,10 @@ def slit_translator(nxinstance):
 def guide_translator(nxinstance):
     from nexusformat.nexus import NXguide
     from moreniius.nxoff import NXoff
-    off_pars = {k: nxinstance.nx_parameter(k) for k in ('l', 'w1', 'h1', 'w2', 'h2')}
+    off_pars = {k: nxinstance.nx_parameter(k, dtype=float) for k in ('l', 'w1', 'h1', 'w2', 'h2')}
     for k in ('w', 'h'):
         off_pars[f'{k}2'] = off_pars[f'{k}1'] if off_pars[f'{k}2'] == 0 else off_pars[f'{k}2']
-    guide_pars = {'m_value': nxinstance.parameter('m')}
+    guide_pars = {'m_value': nxinstance.parameter('m', dtype=float)}
     geometry = NXoff.from_wedge(**off_pars).to_nexus()
     return nxinstance.make_nx(NXguide, OFF_GEOMETRY=geometry, **resolve_parameter_links(guide_pars))
 
@@ -74,28 +78,47 @@ def guide_translator(nxinstance):
 def collimator_linear_translator(nxinstance):
     from nexusformat.nexus import NXcollimator
     from moreniius.nxoff import NXoff
-    pars = {k: nxinstance.nx_parameter(v) for k, v in (('l', 'length'), ('w1', 'xwidth'), ('h1', 'yheight'))}
-    col_pars = dict(divergence_x=nxinstance.parameter('divergence'), divergence_y=nxinstance.parameter('divergenceV'))
-    return nxinstance.make_nx(NXcollimator, OFF_GEOMETRY=NXoff.from_wedge(**pars).to_nexus(),
-                              **resolve_parameter_links(col_pars))
+    pars = {k: nxinstance.nx_parameter(v, dtype=float) for k, v in (
+        ('l', 'length'), ('w1', 'xwidth'), ('h1', 'yheight')
+    )}
+    col_pars = dict(
+        divergence_x=nxinstance.parameter('divergence', dtype=float),
+        divergence_y=nxinstance.parameter('divergenceV', dtype=float)
+    )
+    return nxinstance.make_nx(
+        NXcollimator,
+        OFF_GEOMETRY=NXoff.from_wedge(**pars).to_nexus(),
+        **resolve_parameter_links(col_pars)
+    )
 
 
 def diskchopper_translator(nxinstance):
     from nexusformat.nexus import NXdisk_chopper, NXfield
-    mpars = {k: nxinstance.parameter(k) for k in ('nslit', 'nu', 'radius', 'theta_0', 'phase', 'yheight')}
-    pars = {'slits': mpars['nslit'],
-            'rotation_speed': nxinstance.make_nx(NXfield, mpars['nu'], units='Hz'),
-            'radius': nxinstance.make_nx(NXfield, mpars['radius'], units='m'),
-            'slit_angle': nxinstance.make_nx(NXfield, mpars['theta_0'], units='degrees'),
-            'phase': nxinstance.make_nx(NXfield, mpars['phase'], units='degrees'),
-            'slit_height': nxinstance.make_nx(NXfield, mpars['yheight'] if mpars['yheight'] else mpars['radius'], units='m')}
-    nslit, delta = mpars['nslit'], mpars['theta_0'] / 2.0
+    names_types = (
+        ('nslit', int),
+        ('nu', float),
+        ('radius', float),
+        ('theta_0', float),
+        ('phase', float),
+        ('yheight', float),
+    )
+    m_pars = {k: nxinstance.parameter(k, dtype=d) for k, d in names_types}
+
+    pars = {
+        'slits': m_pars['nslit'],
+        'rotation_speed': nxinstance.make_nx(NXfield, m_pars['nu'], units='Hz'),
+        'radius': nxinstance.make_nx(NXfield, m_pars['radius'], units='m'),
+        'slit_angle': nxinstance.make_nx(NXfield, m_pars['theta_0'], units='degrees'),
+        'phase': nxinstance.make_nx(NXfield, m_pars['phase'], units='degrees'),
+        'slit_height': nxinstance.make_nx(NXfield, m_pars['yheight'] if m_pars['yheight'] else m_pars['radius'], units='m')
+    }
+    nslit, delta = m_pars['nslit'], m_pars['theta_0'] / 2.0
     slit_edges = [y * 360.0 / nslit + x for y in range(int(nslit)) for x in (-delta, delta)]
     nx_slit_edges = [nxinstance.expr2nx(se) for se in slit_edges]
     return nxinstance.make_nx(NXdisk_chopper, slit_edges=NXfield(nx_slit_edges, units='degrees'), **resolve_parameter_links(pars))
 
 
-def _ellipse_vertices_faces(major_x, minor_x, offset_x, major_y, minor_y, offset_y, l, n=10):
+def _ellipse_vertices_faces(*, major_x, minor_x, offset_x, major_y, minor_y, offset_y, l, n=10):
     """
     Create vertices and faces for an elliptical guide with given parameters.
 
@@ -140,6 +163,7 @@ def _ellipse_vertices_faces(major_x, minor_x, offset_x, major_y, minor_y, offset
 
     return vertices, faces
 
+
 def _ellipse_parameters_from_widths(nxinstance):
     from numpy import sqrt
 
@@ -159,33 +183,47 @@ def _ellipse_parameters_from_widths(nxinstance):
         return major, minor, offset
 
     pars = dict(xw='xwidth', xi='linxw', xo='loutxw', yw='yheight', yi='linyh', yo='loutyh', l='l')
-    p = {k: nxinstance.parameter(v) for k, v in pars.items()}
+    p = {k: nxinstance.parameter(v, dtype=float) for k, v in pars.items()}
 
     dim_at = str(nxinstance.obj.get_parameter('dimensionsAt').value)
     major_x, minor_x, offset_x = parameters(dim_at, p['xw'], p['xi'], p['xo'], p['l'])
     major_y, minor_y, offset_y = parameters(dim_at, p['yw'], p['yi'], p['yo'], p['l'])
 
-    return major_x, minor_x, offset_x, major_y, minor_y, offset_y, p['l']
+    return {
+        'major_x': major_x, 'minor_x': minor_x, 'offset_x': offset_x,
+        'major_y': major_y, 'minor_y': minor_y, 'offset_y': offset_y,
+        'l': p['l'],
+    }
 
 
 def elliptic_guide_gravity_translator(nxinstance):
     from nexusformat.nexus import NXguide
     from moreniius.nxoff import NXoff
 
-    ellipse_pars = [f'{f}{s}' for f in ('majorAxis', 'minorAxis', 'majorAxisOffset') for s in ('xw', 'yh')]
-    if all(nxinstance.obj.defines_parameter(p) for p in ellipse_pars):
-        # we can use the specified ellipse parameters directly
-        major_x = nxinstance.parameter('majorAxisxw')
-        minor_x = nxinstance.parameter('minorAxisxw')
-        offset_x = nxinstance.parameter('majorAxisOffsetxw')
-        major_y = nxinstance.parameter('majorAxisyh')
-        minor_y = nxinstance.parameter('minorAxisyh')
-        offset_y = nxinstance.parameter('majorAxisOffsetyh')
-        l = nxinstance.parameter('l')
-    else:
-        major_x, minor_x, offset_x, major_y, minor_y, offset_y, l = _ellipse_parameters_from_widths(nxinstance)
+    def f(name):
+        return nxinstance.parameter(name, dtype=float)
 
-    vertices, faces = _ellipse_vertices_faces(major_x, minor_x, offset_x, major_y, minor_y, offset_y, l, n=10)
+    # names verified against component definition 2026-03-10:
+    # https://github.com/mccode-dev/McCode/blob/main/mcstas-comps/optics/Elliptic_guide_gravity.comp
+    bases = {'major': 'majorAxis', 'minor': 'minorAxis', 'offset': 'majorAxisoffset'}
+    extensions = {'x': 'xw', 'y': 'yh'}
+    names = {f'{a}_{b}': f'{f}{s}' for a, f in bases.items() for b, s in extensions.items()}
+
+    pars = {k: f(v) if nxinstance.obj.defines_parameter(v) else None for k, v in names.items()}
+
+    if len(undef := [x for x in pars.values() if x is None]) == 0:
+        # the total length doesn't fit into the naming scheme
+        pars['l'] = f('l')
+    elif len(undef) < len(pars):
+        msg = f'Only {len(pars)-len(undef)} of {len(pars)} likely parameters are defined'
+        log.warn(f'Likely error state in elliptic_guide_gravity_translator: {msg}')
+
+    if len(undef):
+        # If there were any undefined parameters, we try and fall-back on calculating
+        # them from the guide widths specified at 'entrance', 'mid', or ('exit')
+        pars = _ellipse_parameters_from_widths(nxinstance)
+
+    vertices, faces = _ellipse_vertices_faces(**pars, n=10)
 
     nx_vertices = [[nxinstance.expr2nx(expr) for expr in vector] for vector in vertices]
     nx_faces = [[nxinstance.expr2nx(expr) for expr in face] for face in faces]
@@ -198,8 +236,8 @@ def monitor_translator(nxinstance):
     from moreniius.nxoff import NXoff
     from moreniius.utils import NotNXdict
     from json import loads
-    width = nxinstance.nx_parameter('xwidth')
-    height = nxinstance.nx_parameter('yheight')
+    width = nxinstance.nx_parameter('xwidth', dtype=float)
+    height = nxinstance.nx_parameter('yheight', dtype=float)
     geometry = NXoff.from_wedge(l=0.005, w1=width, h1=height)
     nx_monitor = NXmonitor(OFF_GEOMETRY=geometry.to_nexus())
     if len(nxinstance.obj.metadata):

@@ -22,7 +22,7 @@ class NXInstr:
 
     def __post_init__(self):
         """Start the C translation to ensure McCode-oddities are handled before any C-code parsing."""
-        from mccode_antlr.common import ShapeType, DataType, Value
+        from mccode_antlr.common import ShapeType, DataType
         from mccode_antlr import Flavor
         from mccode_antlr.translators.c import CTargetVisitor
         from mccode_antlr.translators.c_listener import CDeclarator
@@ -36,7 +36,7 @@ class NXInstr:
 
         # only worry about instrument level variables for the moment, and convert the CDeclarations into Expr objects
         def c_declaration_to_expr(dec: CDeclarator) -> Expr:
-            expr = Expr(Value(None)) if dec.init is None else Expr.parse(dec.init)
+            expr = Expr._null() if dec.init is None else Expr.parse(dec.init)
             expr.data_type = DataType.from_name(dec.dtype)
             if dec.is_pointer or dec.is_array:
                 expr.shape_type = ShapeType.vector
