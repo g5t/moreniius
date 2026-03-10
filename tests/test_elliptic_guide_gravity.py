@@ -152,9 +152,9 @@ def test_ellipse_vertices_faces_function():
     n = 5
 
     vertices, faces = _ellipse_vertices_faces(
-        major_x, minor_x, offset_x,
-        major_y, minor_y, offset_y,
-        l, n=n
+        major_x=major_x, minor_x=minor_x, offset_x=offset_x,
+        major_y=major_y, minor_y=minor_y, offset_y=offset_y,
+        l=l, n=n
     )
 
     # Should have (n+1) rings of 4 vertices each

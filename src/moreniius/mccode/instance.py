@@ -37,14 +37,6 @@ COMPONENT_TYPE_NAME_TO_NEXUS = dict(
 # The third element is a mapping of NeXus component parameters to McStas position paramters
 NEXUS_TO_COMPONENT = dict(
     NXdetector=['Monitor_nD', {}, ],
-    NXdisk_chopper=['DiskChopper',
-                    {'slits': 'nslit',
-                     'rotation_speed': 'nu',
-                     'radius': 'radius',
-                     'slit_angle': 'theta_0',
-                     'slit_height': 'yheight',
-                     'phase': 'phase'},
-                    ],
     NXfermi_chopper=['FermiChopper',
                      {'rotation_speed': 'nu',
                       'radius': 'radius',
@@ -72,26 +64,31 @@ class NXInstance:
     nx: Union[None, dict, NXfield] = None
     dump_mcstas: bool = False
 
-    def parameter(self, name, default=None):
+    def parameter(self, name, default=None, dtype=None):
         """
         Pull out a named instance parameter -- if it's value is not a constant, attempt to evaluate it
         using the Instr declare and initialize sections
         """
+        def type_or(value):
+            if dtype is not None and value is not None:
+                return dtype(value)
+            return value
+
         par = self.obj.get_parameter(name)
         if par is None:
             log.warn(f'It appears that {self.obj.type.name} does not define the parameter {name}')
-            return default
+            return type_or(default)
 
         expr = par.value
         # log.info(f'get parameter {name} which is {par}  and expr {repr(expr)}')
         if expr.is_constant:
-            return expr.value
+            return type_or(expr.value)
 
         # Check if the expression depends on one of the instrument parameters (and thus needs a NXlog stream)
         # First resolve any declare-variables
         evaluated = expr.evaluate(self.instr.declared)
         if evaluated.is_constant:
-            return evaluated.value
+            return type_or(evaluated.value)
         # Then check for instrument parameter(s)
         dependencies = [par for par in self.instr.instr.parameters if evaluated.depends_on(par.name)]
         log.warn(f'The parameter {name} for component instance {self.obj.name} '
@@ -101,9 +98,9 @@ class NXInstance:
     def expr2nx(self, expr: Expr):
         return self.instr.expr2nx(expr)
 
-    def nx_parameter(self, name, default=None):
+    def nx_parameter(self, name, default=None, dtype=None):
         """Retrieve the named instance parameter and convert to a NeXus compatible value"""
-        return self.expr2nx(self.parameter(name, default))
+        return self.expr2nx(self.parameter(name, default=default, dtype=dtype))
 
     def make_nx(self, nx_class, *args, **kwargs):
         return self.instr.make_nx(nx_class, *args, **kwargs)
