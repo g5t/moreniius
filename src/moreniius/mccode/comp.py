@@ -151,7 +151,7 @@ def _ellipse_vertices_faces(*, major_x, minor_x, offset_x, major_y, minor_y, off
     for x in rings:
         z = x * l
         w = ellipse_width(minor_x, major_x, offset_x - minor_x + z)
-        h = ellipse_width(minor_y, major_y, offset_y - minor_y + x)
+        h = ellipse_width(minor_y, major_y, offset_y - minor_y + z)
 
         vertices.extend([[-w, -h, z], [-w, h, z], [w, h, z], [w, -h, z]])
 
