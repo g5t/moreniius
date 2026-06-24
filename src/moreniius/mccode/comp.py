@@ -65,12 +65,12 @@ def slit_translator(nxinstance):
 
 
 def guide_translator(nxinstance):
-    from nexusformat.nexus import NXguide
+    from nexusformat.nexus import NXguide, NXfield
     from moreniius.nxoff import NXoff
     off_pars = {k: nxinstance.nx_parameter(k, dtype=float) for k in ('l', 'w1', 'h1', 'w2', 'h2')}
     for k in ('w', 'h'):
         off_pars[f'{k}2'] = off_pars[f'{k}1'] if off_pars[f'{k}2'] == 0 else off_pars[f'{k}2']
-    guide_pars = {'m_value': nxinstance.parameter('m', dtype=float)}
+    guide_pars = {'m_value': nxinstance.make_nx(NXfield, nxinstance.parameter('m', dtype=float), units="")}
     geometry = NXoff.from_wedge(**off_pars).to_nexus()
     return nxinstance.make_nx(NXguide, OFF_GEOMETRY=geometry, **resolve_parameter_links(guide_pars))
 
