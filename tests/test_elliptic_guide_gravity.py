@@ -175,3 +175,41 @@ def test_ellipse_vertices_faces_function():
     assert min(z_coords) == pytest.approx(0.0)
     assert max(z_coords) == pytest.approx(l)
 
+
+def test_guide_m_value_has_units():
+    """Test that the guide m_value dataset has a units attribute (issue #41)."""
+    from mccode_antlr import Flavor
+    from mccode_antlr.assembler import Assembler
+    import moreniius
+
+    # Create an instrument with a regular Guide_gravity component
+    inst = Assembler('guide_test', flavor=Flavor.MCSTAS)
+    inst.component('origin', 'Arm', at=(0, 0, 0))
+    inst.component('source', 'Source_simple', at=[(0, 0, 0), 'origin'])
+    inst.component(
+        'guide', 'Guide_gravity',
+        at=[(0, 0, 1), 'source'],
+        parameters={
+            'w1': 0.1, 'h1': 0.1, 'w2': 0.1, 'h2': 0.1,
+            'l': 2.0, 'm': 1.5
+        }
+    )
+    
+    instr = inst.instrument
+    me = moreniius.MorEniius.from_mccode(
+        instr, origin='origin', only_nx=False, absolute_depends_on=True
+    )
+
+    guide = me.nx['guide']
+    assert isinstance(guide, NXguide)
+
+    # The guide should have an m_value dataset
+    assert 'm_value' in guide, "Guide should have m_value dataset"
+    
+    # The m_value should have a units attribute (issue #41)
+    m_value = guide['m_value']
+    assert hasattr(m_value, 'attrs'), "m_value should have attributes"
+    assert 'units' in m_value.attrs, "m_value should have a units attribute"
+    # According to issue #41, it should be dimensionless (empty string or 'dimensionless')
+    assert m_value.attrs['units'] in ('', 'dimensionless'), f"m_value units should be dimensionless, got {m_value.attrs['units']}"
+
