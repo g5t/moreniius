@@ -150,10 +150,12 @@ def test_ellipse_vertices_faces_function():
     major_y, minor_y, offset_y = 1.5, 0.06, 0.5
     l = 2.0
     n = 5
+    m_left, m_top, m_right, m_bottom = 1., 2., 3., 4.
 
-    vertices, faces = _ellipse_vertices_faces(
+    vertices, faces, m_values = _ellipse_vertices_faces(
         major_x=major_x, minor_x=minor_x, offset_x=offset_x,
         major_y=major_y, minor_y=minor_y, offset_y=offset_y,
+        m_left=m_left, m_top=m_top, m_right=m_right, m_bottom=m_bottom,
         l=l, n=n
     )
 
@@ -163,6 +165,8 @@ def test_ellipse_vertices_faces_function():
     # Each ring creates 4 faces (top, bottom, left, right of guide)
     # For n segments, we have n * 4 faces
     assert len(faces) == n * 4
+
+    assert len(m_values) == n * 4, "Length of faces and m_values must match"
 
     # Each vertex should have 3 coordinates
     assert all(len(v) == 3 for v in vertices)
@@ -174,6 +178,25 @@ def test_ellipse_vertices_faces_function():
     z_coords = [v[2] for v in vertices]
     assert min(z_coords) == pytest.approx(0.0)
     assert max(z_coords) == pytest.approx(l)
+
+    for i in range(n):
+        assert m_values[i*4:(i+1)*4] == [m_left, m_top, m_right, m_bottom]
+
+
+def test_elliptic_guide_m_values_are_default():
+    import moreniius
+    from numpy import allclose
+
+    instr = make_elliptic_guide_instrument(use_explicit_ellipse_pars=True)
+    me = moreniius.MorEniius.from_mccode(
+        instr, origin='origin', only_nx=False, absolute_depends_on=True
+    )
+
+    guide = me.nx['elliptic_guide']
+    m_values = guide['m_value']
+    assert m_values.ndim == 1
+    assert m_values.shape[0] % 4 == 0
+    assert allclose(m_values, 2.0), "The in-component default is m=2.0"
 
 
 def test_guide_m_value_has_units():
