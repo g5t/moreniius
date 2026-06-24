@@ -118,7 +118,12 @@ def diskchopper_translator(nxinstance):
     return nxinstance.make_nx(NXdisk_chopper, slit_edges=NXfield(nx_slit_edges, units='degrees'), **resolve_parameter_links(pars))
 
 
-def _ellipse_vertices_faces(*, major_x, minor_x, offset_x, major_y, minor_y, offset_y, l, n=10):
+def _ellipse_vertices_faces(*,
+                            major_x, minor_x, offset_x,
+                            major_y, minor_y, offset_y,
+                            m_left, m_top, m_right, m_bottom,
+                            l, n=10
+                            ):
     """
     Create vertices and faces for an elliptical guide with given parameters.
 
@@ -136,6 +141,14 @@ def _ellipse_vertices_faces(*, major_x, minor_x, offset_x, major_y, minor_y, off
         Minor axis half-length in the y-direction.
     offset_y : float
         Offset from the end of the ellipse to the guide entrance in the y-direction.
+    m_left: float
+        m-value of all left-side surfaces (x < 0, n~=[1,0,0])
+    m_top: float
+        m-value of all top-side surfaces (y > 0, n~=[0,-1,0])
+    m_right: float
+        m-value of all right-side surfaces (x > 0, n~=[-1,0,0])
+    m_bottom: float
+        m-value of all bottom-side surfaces (y < 0, n~=[0,1,0])
     l : float
         Length of the guide. l <= 2*major_x - offset_x and l <= 2*major_y - offset_y
     n : int, optional
@@ -147,7 +160,7 @@ def _ellipse_vertices_faces(*, major_x, minor_x, offset_x, major_y, minor_y, off
         return 0 if abs(at) > major else minor * sqrt(1 - (at / major) ** 2)
 
     rings = arange(n + 1) / n
-    faces, vertices = [], []
+    faces, vertices, m_values = [], [], []
     for x in rings:
         z = x * l
         w = ellipse_width(minor_x, major_x, offset_x - minor_x + z)
@@ -159,9 +172,12 @@ def _ellipse_vertices_faces(*, major_x, minor_x, offset_x, major_y, minor_y, off
     # The entry and exit are not guide faces and therefore are NOT represented here!
     for i in range(n):
         j0, j1, j2, j3, j4, j5, j6, j7 = [4 * i + k for k in range(8)]
+        # these faces are [left, top, right, bottom] for this segment
         faces.extend([[j0, j1, j5, j4], [j1, j2, j6, j5], [j2, j3, j7, j6], [j3, j0, j4, j7]])
+        # and we need their m-values too:
+        m_values.extend([m_left, m_top, m_right, m_bottom])
 
-    return vertices, faces
+    return vertices, faces, m_values
 
 
 def _ellipse_parameters_from_widths(nxinstance):
@@ -195,9 +211,24 @@ def _ellipse_parameters_from_widths(nxinstance):
         'l': p['l'],
     }
 
+def _elliptic_guide_gravity_m_values(nxinstance):
+    sides = ('left', 'top', 'right', 'bottom')
+
+    for bad in [f'mvalues{side}' for side in sides]:
+        if nxinstance.obj.defines_parameter(bad):
+            log.warn(f'{nxinstance.obj.name} defines {bad} which is not handled.'
+                     'Expect incorrect m-values in output.')
+
+    names = tuple(f'm_{side}' for side in sides)
+    p = {k: nxinstance.parameter(k.replace('_',''), dtype=float) for k in ('m',) + names}
+    # Mimic the in-component priority logic:
+    for x in [y for y in names if p[y] == -1]:
+        p[x] = p['m']
+    return {n: p[n] for n in names}
+
 
 def elliptic_guide_gravity_translator(nxinstance):
-    from nexusformat.nexus import NXguide
+    from nexusformat.nexus import NXguide, NXfield
     from moreniius.nxoff import NXoff
 
     def f(name):
@@ -223,12 +254,19 @@ def elliptic_guide_gravity_translator(nxinstance):
         # them from the guide widths specified at 'entrance', 'mid', or ('exit')
         pars = _ellipse_parameters_from_widths(nxinstance)
 
-    vertices, faces = _ellipse_vertices_faces(**pars, n=10)
+    # extend the dictionary to include per-side m-values
+    pars = pars | _elliptic_guide_gravity_m_values(nxinstance)
+
+    vertices, faces, m_values = _ellipse_vertices_faces(**pars, n=10)
 
     nx_vertices = [[nxinstance.expr2nx(expr) for expr in vector] for vector in vertices]
     nx_faces = [[nxinstance.expr2nx(expr) for expr in face] for face in faces]
+    nx_m_values = nxinstance.make_nx(NXfield, [nxinstance.expr2nx(expr) for expr in m_values], units="")
 
-    return NXguide(OFF_GEOMETRY=NXoff(nx_vertices, nx_faces).to_nexus())
+    # TODO check whether we can rename OFF_GEOMETRY -- the specification uses all-caps
+    #      italicised entry names as _generic_ values and would allow for any-named
+    #      group which is an NXoff in this case. chexus and scipp may disagree
+    return NXguide(OFF_GEOMETRY=NXoff(nx_vertices, nx_faces).to_nexus(), m_value=nx_m_values)
 
 
 def monitor_translator(nxinstance):
