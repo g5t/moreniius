@@ -111,84 +111,62 @@ class NXInstr:
         """Return the other end of edges starting at the named node"""
         return list(self.forward_graph[name])
 
+    def resolve_target(self, rel):
+        target = f'/entry/instrument/{rel.name}'
+        if (depends_on := self.nx.get(rel.name)) is None:
+            raise RuntimeError('transformations defined out of order')
+        if (t := depends_on.get('depends_on')) is None:
+            return None
+        if isinstance(t, NXfield):
+            t = str(t)
+        if t.startswith('/'):
+            return t
+        return None if t == '.' else f'{target}/{t}'
+
     def make_transformations(self, inst: Instance):
         from mccode_antlr.instr.orientation import Vector, Angles, Parts
         from .orientation import NXOrient, NXParts
 
-        def abs_ref(ref):
-            return f'/entry/instrument/{ref}'
-
-        def last_ref(refs: list[tuple[str, NXfield]]) -> str | None:
+        def last_ref(refs: list[tuple[str, NXfield]], default: str) -> str:
             try:
                 return next(reversed(refs))[0]
             except StopIteration:
-                pass
+                return default
+
 
         at_vec, at_rel = inst.at_relative
         rot_vec, rot_rel = inst.rotate_relative
 
-        any_abs = at_rel is None or rot_rel is None
-        nx_ori = NXOrient(self, inst.orientation - self.origin) if any_abs else None
-        if at_rel is None and rot_rel is None:
-            return nx_ori.transformations(inst.name)
-
         trans = []
-        if any_abs or at_rel != rot_rel:
-            import warnings
-            warnings.warn(
-                "All mixed-reference-type orientations untested. "
-                "Only 'AT (x, y, z) ABSOLUTE ROTATED (a, b, c) REF' might work\n"
-            )
         at_vec = Vector(*at_vec) if isinstance(at_vec, tuple) else at_vec
         rot_vec = Angles(*rot_vec) if isinstance(rot_vec, tuple) else rot_vec
         if at_rel is None:
-            # Absolute position with relative rotation
-            trans.extend(nx_ori.position_transformations(inst.name))
-            # Get the _rotation_ of the reference to add here before any new rotation
+            nx_ori = NXOrient(self, inst.orientation - self.origin)
+            if rot_rel is None:
+                return nx_ori.transformations(inst.name)
+            target = self.resolve_target(rot_rel)
+            trans.extend(nx_ori.position_transformations(inst.name, target))
             rel_ori = NXOrient(self, rot_rel.orientation - self.origin)
-            trans.extend(rel_ori.rotation_transformations(rot_rel.name, last_ref(trans)))
-            # Add the relative rotation onto the reference rotation
+            trans.extend(rel_ori.rotation_transformations(rot_rel.name, last_ref(trans, target)))
             rot = Parts(Parts.from_at_rotated(Vector(), rot_vec, True).stack()).reduce()
             nx_parts = NXParts(self, rot, rot)
-            trans.extend(nx_parts.rotation_transformations(inst.name, last_ref(trans)))
-        elif rot_rel is None:
-            at_name = at_rel.name if isinstance(at_rel, Instance) else at_rel
-            raise RuntimeError(
-                f"'COMPONENT {inst.name} ... AT {at_vec} RELATIVE {at_name} ROTATED {rot_vec} ABSOLUTE'"
-                " not yet implemented"
-            )
-        elif at_rel != rot_rel:
-            at_name = at_rel.name if isinstance(at_rel, Instance) else at_rel
-            rot_name = rot_rel.name if isinstance(rot_rel, Instance) else rot_rel
-            raise RuntimeError(
-                f"'COMPONENT {inst.name} ... AT {at_vec} RELATIVE {at_name} ROTATED {rot_vec} RELATIVE {rot_name}'"
-                " not yet implemented"
-            )
+            trans.extend(nx_parts.rotation_transformations(inst.name, last_ref(trans, target)))
         else:
+            target = self.resolve_target(at_rel)
             at_parts = Parts.from_at_rotated(at_vec, Angles(), True)
             rot_parts = Parts.from_at_rotated(Vector(), rot_vec, True)
             nx_parts = NXParts(self, at_parts, rot_parts)
-            # TODO replace the absolute reference to the component by an
-            #      absolute reference to _its_ `depends_on` target
-            target = abs_ref(at_rel.name)
-            if (depends_on := self.nx.get(at_rel.name)) is not None:
-                if (t := depends_on.get('depends_on')) is not None:
-                    # the relative target has a dependency, so we chain off of that:
-                    if isinstance(t, NXfield):
-                        # TODO what if this isn't a string?
-                        t = str(t)
-                    if t.startswith('/'):
-                        target = t
-                    elif t == '.':
-                        target = None
-                    else:
-                        target = f'{target}/{t}'
-                else:
-                    # the relative target exists but has no dependency, so is absolute
-                    target = None
-            else:
-                raise RuntimeError('transformations defined out of order')
-            trans.extend(nx_parts.transformations(inst.name, target))
+            trans.extend(nx_parts.position_transformations(inst.name, target))
+            if at_rel != rot_rel:
+                a_ori = NXOrient(self, at_rel.orientation - self.origin)
+                trans.extend(a_ori.rotation_inverse_transformations(inst.name, last_ref(trans, target)))
+                if rot_rel is not None:
+                    target = self.resolve_target(rot_rel)  # fallback in case trans empty
+                    b_ori = NXOrient(self, rot_rel.orientation - self.origin)
+                    trans.extend(b_ori.rotation_transformations(rot_rel.name, last_ref(trans, target)))
+            trans.extend(nx_parts.rotation_transformations(inst.name, last_ref(trans, target)))
+            if not trans and target is not None:
+                trans = [(target, NXfield())]
 
         return {k: v for k, v in trans}
 

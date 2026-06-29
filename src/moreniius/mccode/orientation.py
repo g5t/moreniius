@@ -54,6 +54,19 @@ class NXPart:
         # handle the case where angle is not a constant?
         return self.make_nx(NXfield, angle, vector=axis, depends_on=dep, transformation_type='rotation', units=angle_unit)
 
+    def rotation_inverse(self, dep: str) -> NXfield:
+        from mccode_antlr.instr import TranslationPart
+        if isinstance(self.o, TranslationPart):
+            raise RuntimeError('Part is a translation')
+        try:
+            axis, angle, angle_unit = self.o.rotation_axis_angle
+        except RuntimeError as error:
+            log.error(f'Failed to get rotation axis and angle: {error}')
+            print(repr(self.o))
+            raise NotImplementedError()
+        return self.make_nx(NXfield, angle, vector=[-v for v in axis], depends_on=dep,
+                            transformation_type='rotation', units=angle_unit)
+
     def transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
         if self.o.is_translation and self.o.is_rotation:
             ops = self.translations(dep, name)
@@ -90,6 +103,15 @@ class NXParts:
         dep = dep or '.'
         return self._transformations(name, dep, 'r', self.rotation.stack())
 
+    def rotation_inverse_transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
+        dep = dep or '.'
+        nx_transformations = []
+        for i, op in enumerate(reversed(list(self.rotation.stack()))):
+            entry = (f'{name}_ri{i}', NXPart(self.instr, op).rotation_inverse(dep))
+            nx_transformations.append(entry)
+            dep = entry[0]
+        return nx_transformations
+
     def transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
         parts = self.position_transformations(name, dep=dep)
         # If there were any positioning transformations, we need to update
@@ -125,5 +147,8 @@ class NXOrient:
 
     def rotation_transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
         return self.nx_parts.rotation_transformations(name, dep)
+
+    def rotation_inverse_transformations(self, name: str, dep: str | None = None) -> list[tuple[str, NXfield]]:
+        return self.nx_parts.rotation_inverse_transformations(name, dep)
 
 
