@@ -136,8 +136,8 @@ class NXInstr:
         if any_abs or at_rel != rot_rel:
             import warnings
             warnings.warn(
-                "All mixed-reference-type orientations untested."
-                "Only 'AT (x, y, z) ABSOLUTE ROTATE (a, b, c) REF' might work"
+                "All mixed-reference-type orientations untested. "
+                "Only 'AT (x, y, z) ABSOLUTE ROTATED (a, b, c) REF' might work\n"
             )
         at_vec = Vector(*at_vec) if isinstance(at_vec, tuple) else at_vec
         rot_vec = Angles(*rot_vec) if isinstance(rot_vec, tuple) else rot_vec
@@ -152,13 +152,16 @@ class NXInstr:
             nx_parts = NXParts(self, rot, rot)
             trans.extend(nx_parts.rotation_transformations(inst.name, last_ref(trans)))
         elif rot_rel is None:
+            at_name = at_rel.name if isinstance(at_rel, Instance) else at_rel
             raise RuntimeError(
-                "'AT (x, y, z) RELATIVE comp ROTATE (a, b, c) ABSOLUTE'"
+                f"'COMPONENT {inst.name} ... AT {at_vec} RELATIVE {at_name} ROTATED {rot_vec} ABSOLUTE'"
                 " not yet implemented"
             )
         elif at_rel != rot_rel:
+            at_name = at_rel.name if isinstance(at_rel, Instance) else at_rel
+            rot_name = rot_rel.name if isinstance(rot_rel, Instance) else rot_rel
             raise RuntimeError(
-                "'AT (x, y, z) RELATIVE comp1 ROTATE (a, b, c) RELATIVE comp2'"
+                f"'COMPONENT {inst.name} ... AT {at_vec} RELATIVE {at_name} ROTATED {rot_vec} RELATIVE {rot_name}'"
                 " not yet implemented"
             )
         else:
