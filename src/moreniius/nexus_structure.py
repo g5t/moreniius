@@ -19,8 +19,11 @@ def load_instr(filepath: str | Path) -> Instr:
     elif filepath.suffix.lower() == '.json':
         from mccode_antlr.io.json import load_json
         return load_json(filepath)
+    elif filepath.suffix.lower() in ('.msgpack', '.mpk'):
+        from mccode_antlr.io.msgpack import load_msgpack
+        return load_msgpack(filepath)
 
-    from mccode_antlr.io import load_hdf5
+    from mccode_antlr.io import load_hdf5  # deprecated since mccode-antlr 0.20.2
     return load_hdf5(filepath)
 
 

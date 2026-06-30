@@ -24,7 +24,8 @@ def readout_translator(instance):
     from .utils import ev44_event_data_group
     stream = ev44_event_data_group(source='caen', topic=BIFROST_DETECTOR_TOPIC)
 
-    readout_pos, readout_rot = instance.obj.orientation.position_parts(), instance.obj.orientation.rotation_parts()
+    readout_orient = instance.instr.orientations[instance.obj.name]
+    readout_pos, readout_rot = readout_orient.position_parts(), readout_orient.rotation_parts()
 
     counts = [geometry.detector_number.size for _, _, geometry in BIFROST_DETECTOR_MODULES.values()]
     total = sum(counts)
@@ -337,7 +338,8 @@ def bifrost_detector_collector(self):
     # nx_obj = detector_tubes_only_cylinder(self)  # each pixel is a cylinder
     nx_obj = detector_tubes_offsets_and_one_cylinder(self)  # all pixels share one cylinder
     # stash the object parts
-    pos, rot = self.obj.orientation.position_parts(), self.obj.orientation.rotation_parts()
+    orient = self.instr.orientations[self.obj.name]
+    pos, rot = orient.position_parts(), orient.rotation_parts()
     BIFROST_DETECTOR_MODULES[str(self.obj.when)] = pos, rot, nx_obj.geometry
     # and return it
     return nx_obj

@@ -19,6 +19,7 @@ class NXInstr:
     only_nx: bool = field(default=False)
     forward_graph: Union[DiGraph, None] = None
     reverse_graph: Union[DiGraph, None] = None
+    orientations: dict = field(default_factory=dict)
 
     def __post_init__(self):
         """Start the C translation to ensure McCode-oddities are handled before any C-code parsing."""
@@ -56,6 +57,8 @@ class NXInstr:
 
         self.declared = variables
         #
+        if not self.orientations:
+            self.orientations = self.instr.resolve_orientations()
         if self.origin is None:
             self.guess_origin()
             assert self.origin is not None
@@ -91,7 +94,7 @@ class NXInstr:
             )
         if possible:
             self.origin_name = possible[0].name
-            self.origin = possible[0].orientation
+            self.origin = self.orientations[possible[0].name]
         else:
             self.origin = Orient()
 
@@ -141,11 +144,11 @@ class NXInstr:
         at_vec = Vector(*at_vec) if isinstance(at_vec, tuple) else at_vec
         rot_vec = Angles(*rot_vec) if isinstance(rot_vec, tuple) else rot_vec
         if at_rel is None:
-            nx_ori = NXOrient(self, inst.orientation - self.origin)
+            nx_ori = NXOrient(self, self.orientations[inst.name] - self.origin)
             if rot_rel is None:
                 return nx_ori.transformations(inst.name)
             trans.extend(nx_ori.position_transformations(inst.name))
-            rel_ori = NXOrient(self, rot_rel.orientation - self.origin)
+            rel_ori = NXOrient(self, self.orientations[rot_rel.name] - self.origin)
             trans.extend(rel_ori.rotation_transformations(rot_rel.name, last_ref(trans)))
             rot = Parts(Parts.from_at_rotated(Vector(), rot_vec, True).stack()).reduce()
             nx_parts = NXParts(self, rot, rot)
@@ -157,11 +160,11 @@ class NXInstr:
             nx_parts = NXParts(self, at_parts, rot_parts)
             trans.extend(nx_parts.position_transformations(inst.name, target))
             if at_rel != rot_rel:
-                a_ori = NXOrient(self, at_rel.orientation - self.origin)
+                a_ori = NXOrient(self, self.orientations[at_rel.name] - self.origin)
                 trans.extend(a_ori.rotation_inverse_transformations(inst.name, last_ref(trans, target)))
                 if rot_rel is not None:
                     target = self.resolve_target(rot_rel)  # fallback in case trans empty
-                    b_ori = NXOrient(self, rot_rel.orientation - self.origin)
+                    b_ori = NXOrient(self, self.orientations[rot_rel.name] - self.origin)
                     trans.extend(b_ori.rotation_transformations(rot_rel.name, last_ref(trans, target)))
             trans.extend(nx_parts.rotation_transformations(inst.name, last_ref(trans, target)))
             if not trans and target is not None:
