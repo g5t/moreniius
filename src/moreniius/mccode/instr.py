@@ -127,7 +127,7 @@ class NXInstr:
         from mccode_antlr.instr.orientation import Vector, Angles, Parts
         from .orientation import NXOrient, NXParts
 
-        def last_ref(refs: list[tuple[str, NXfield]], default: str) -> str:
+        def last_ref(refs: list[tuple[str, NXfield]], default: str | None = None) -> str | None:
             try:
                 return next(reversed(refs))[0]
             except StopIteration:
@@ -144,13 +144,12 @@ class NXInstr:
             nx_ori = NXOrient(self, inst.orientation - self.origin)
             if rot_rel is None:
                 return nx_ori.transformations(inst.name)
-            target = self.resolve_target(rot_rel)
-            trans.extend(nx_ori.position_transformations(inst.name, target))
+            trans.extend(nx_ori.position_transformations(inst.name))
             rel_ori = NXOrient(self, rot_rel.orientation - self.origin)
-            trans.extend(rel_ori.rotation_transformations(rot_rel.name, last_ref(trans, target)))
+            trans.extend(rel_ori.rotation_transformations(rot_rel.name, last_ref(trans)))
             rot = Parts(Parts.from_at_rotated(Vector(), rot_vec, True).stack()).reduce()
             nx_parts = NXParts(self, rot, rot)
-            trans.extend(nx_parts.rotation_transformations(inst.name, last_ref(trans, target)))
+            trans.extend(nx_parts.rotation_transformations(inst.name, last_ref(trans)))
         else:
             target = self.resolve_target(at_rel)
             at_parts = Parts.from_at_rotated(at_vec, Angles(), True)
