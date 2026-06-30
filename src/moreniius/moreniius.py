@@ -1,5 +1,5 @@
 from __future__ import annotations
-from networkx import Graph
+from networkx import DiGraph
 from mccode_antlr.instr import Instr
 
 
@@ -15,7 +15,7 @@ class MorEniius:
                     only_nx: bool = False,
                     nxlog_root: str | None = None,
                     absolute_depends_on: bool = False,
-                    graph: Graph | None = None,
+                    graph: DiGraph | None = None,
                     ):
         from .mccode import NXInstr
         nxlog_root = nxlog_root or '/entry/parameters'
