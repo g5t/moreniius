@@ -31,6 +31,7 @@ will all work, even if added to the class after instances have been created.
 A very nice possible enhancement to this approach would be to register each translator as a property
 of the NXInstance class; then it can be used 'transparently' without needing to explicitly call it.
 """
+from nexusformat.nexus import NXfield
 from zenlog import log
 from mccode_antlr.common import Expr
 from moreniius.utils import resolve_parameter_links
@@ -38,30 +39,36 @@ from moreniius.utils import resolve_parameter_links
 
 def slit_translator(nxinstance):
     """The Slit component _must_ define (xmin, xmax) _or_ xwidth, and similarly the y-named parameters"""
-    from nexusformat.nexus import NXslit
+    from nexusformat.nexus import NXaperture, NXpositioner
 
     def f(name):
         return nxinstance.parameter(name, dtype=float)
 
-    if nxinstance.obj.defines_parameter('xwidth'):
-        x_gap = f('xwidth')
-        x_zero = Expr.float(0)
+    if all(nxinstance.obj.defines_parameter(x) for x in ('xwidth', 'yheight')):
+        shape = "straight slit"
+    elif any(nxinstance.obj.defines_parameter(x) for x in ('xmin', 'xmax', 'ymin', 'ymax')):
+        shape = "bladed"
     else:
-        x_gap = f('xmax') - f('xmin')
-        x_zero = f('xmax') + f('xmin')
-    if nxinstance.obj.defines_parameter('ywidth'):
-        y_gap = f('ywidth')
-        y_zero = Expr.float(0)
-    else:
-        y_gap = f('ymax') - f('ymin')
-        y_zero = f('ymax') + f('ymin')
+        # this should not be possible for McStas components
+        shape = "open"
 
-    if isinstance(x_zero, Expr) or isinstance(y_zero, Expr):
-        log.warn(f'{nxinstance.obj.name} has a non-constant x or y zero, which requires special handling for NeXus')
-    elif abs(x_zero) or abs(y_zero):
-        log.warn(f'{nxinstance.obj.name} should be translated by [{x_zero}, {y_zero}, 0] via eniius_data METADATA')
-    params = resolve_parameter_links(dict(x_gap=x_gap, y_gap=y_gap))
-    return nxinstance.make_nx(NXslit, **params)
+    pars = {
+        'description': nxinstance.make_nx(NXfield, f"McStas slit {nxinstance.obj.name}"),
+        'shape': nxinstance.make_nx(NXfield, shape)
+    }
+
+    for x in ('xmin', 'xmax', 'ymin', 'ymax', 'xwidth', 'yheight'):
+        pos_pars = {
+            'name': nxinstance.make_nx(NXfield, x),
+            'value': nxinstance.make_nx(
+                NXfield, nxinstance.parameter(x, dtype=float), units='m'
+            )
+        }
+        pars[x] = nxinstance.make_nx(
+            NXpositioner, **resolve_parameter_links(pos_pars)
+        )
+
+    return nxinstance.make_nx(NXaperture, **pars)
 
 
 def guide_translator(nxinstance):
